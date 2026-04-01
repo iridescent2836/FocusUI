@@ -298,7 +298,7 @@ def build_patch_score_from_uigraph(
                 # Check right neighbor
                 if j + 1 < grid_w_half:
                     right_patch = patches[t, i, j + 1, ...]
-                    if np.linalg.norm(current_patch - right_patch) < ui_graph_threshold:
+                    if np.linalg.norm(current_patch - right_patch) < ui_graph_threshold: # TODO: 这个判断是否应该属于一个 union 的条件，有没有更好的计算方式？
                         uf.union(current_idx, patch_idx(t, i, j + 1))
 
                 # Check bottom neighbor
@@ -356,7 +356,7 @@ def merge_patches_mean(arr: np.ndarray, merge_size: int = MERGE_SIZE) -> np.ndar
 # =================================
 def preprocess_focusui_data(
     ele_image: Image.Image,
-    ele_bbox: Optional[Tuple[float, float, float, float]],
+    ele_bbox: Optional[Tuple[float, float, float, float]] = None,
     gt_bbox_weight: float = 1.0,
     gt_uigraph_weight: float = 0.5,
     tokenizer=None,
@@ -393,14 +393,15 @@ def preprocess_focusui_data(
     resized_image = ele_image.resize((smart_w, smart_h))
 
     # Compute bounding box-based patch scores
-    if ele_bbox:
+    if ele_bbox is not None:
         patch_score_bbox = build_patch_score_from_bbox(
             resized_image,
             ele_bbox,
             patch_size=patch_size,
         )
     else:
-        num_merged_patches = (smart_w // patch_merge_size) * (smart_h // patch_merge_size)
+        num_merged_patches = (smart_w // patch_size) * (smart_h // patch_size)
+        # print(f"num_merged_patches = {num_merged_patches}")
         patch_score_bbox = np.zeros(num_merged_patches, dtype=np.float32)
 
     # Compute UI graph-based patch scores
@@ -412,6 +413,9 @@ def preprocess_focusui_data(
     )
 
     # Combine scores with weights
+
+    # print(f"patch_score_bbox = {patch_score_bbox.shape}")
+    # print(f"patch_score_uigraph = {patch_score_uigraph.shape}")
     patch_scores_label = (
         gt_bbox_weight * patch_score_bbox +
         gt_uigraph_weight * patch_score_uigraph

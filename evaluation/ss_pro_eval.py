@@ -12,6 +12,7 @@ from typing import Dict, List
 
 import torch
 from PIL import Image
+import random
 from tqdm import tqdm
 
 from evaluation.shared_grounding_eval import (
@@ -52,9 +53,18 @@ def evaluate(
     IMAGE_PATCH_SIZE = IMAGE_PATCH_SIZE_LOADED
 
     # Load dataset
+    # with open(data_fn, "r") as f:
+    #     data = json.load(f)
+    # print(f"Loaded {len(data)} examples from {data_fn}")
+
     with open(data_fn, "r") as f:
-        data = json.load(f)
-    print(f"Loaded {len(data)} examples from {data_fn}")
+        data_all = json.load(f)
+
+    random.seed(42)
+    num_samples = min(20, len(data_all))
+    data = random.sample(data_all, num_samples)
+
+    print(f"{len(data)} samples are randomly selected for evaluation.")
 
     results: List[Dict] = []
     overlay_out_dir = os.path.join(args.save_path, "saliency_heatmaps")
@@ -256,9 +266,9 @@ def get_metric(list_of_examples, groups=["Dev", "Creative", "CAD", "Scientific",
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_type", type=str, default="focusui_3b")
-    parser.add_argument("--model_name_or_path", type=str, default="checkpoints/focusui_3b")
+    parser.add_argument("--model_name_or_path", type=str, default="./checkpoints/FocusUI-3B")
     parser.add_argument("--save_path", type=str, default="./")
-    parser.add_argument("--data_path", type=str, default="./dataset/ScreenSpot-Pro")
+    parser.add_argument("--data_path", type=str, default="./datasets/UI-Grounding-Benchmarks/ScreenSpot-Pro")
     parser.add_argument("--topk", type=int, default=3, help="Topk")
     parser.add_argument(
         "--no-placeholder",

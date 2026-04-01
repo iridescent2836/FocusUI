@@ -15,6 +15,8 @@ from focusui.constants import (
 
 from focusui.dataset import process_vision_info_w_factor
 
+from focusui.preprocess_focusui import preprocess_focusui_data
+
 class ForceFollowTokensLogitsProcessor(LogitsProcessor):
     """
     Forces tokens B (pointer_pad_token) and C (pointer_end_token) to follow token A (pointer_start_token).
@@ -30,7 +32,7 @@ class ForceFollowTokensLogitsProcessor(LogitsProcessor):
     def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
         """
         Called at each decoding step to modify `scores`.
-        
+
         Args:
             input_ids: shape (batch_size, seq_len). The already-decoded tokens.
             scores:    shape (batch_size, vocab_size). Model logits for the next token.
@@ -38,7 +40,7 @@ class ForceFollowTokensLogitsProcessor(LogitsProcessor):
         batch_size = input_ids.shape[0]
         if batch_size > 1:
             raise NotImplementedError("Batch size must be 1 for this logits processor.")
-        
+
         # We assume batch_size=1 for simplicity; if you have multiple sequences,
         # you'll need to adapt the logic to handle each item in the batch.
         last_token_id = input_ids[0, -1].item()
@@ -46,7 +48,7 @@ class ForceFollowTokensLogitsProcessor(LogitsProcessor):
         # If the last token was A, enqueue B and C
         if last_token_id == self.token_a_id:
             self.force_queue.extend(self.forced_sequence)
-        
+
         # If we have forced tokens waiting in the queue, override the distribution
         if len(self.force_queue) > 0:
             forced_token = self.force_queue.pop(0)  # next token to force
@@ -54,7 +56,7 @@ class ForceFollowTokensLogitsProcessor(LogitsProcessor):
             new_scores = torch.full_like(scores, float('-inf'))
             new_scores[0, forced_token] = 0.0  # log prob = 0 => prob = 1
             return new_scores
-        
+
         # Otherwise, return scores unmodified
         return scores
 
@@ -85,19 +87,19 @@ def get_prediction_region_point(attn_scores, n_width, n_height, activation_thres
         y = idx // n_width
         x = idx % n_width
         topk_coords.append((y, x, idx))
-    
+
     # Divide into connected regions
     regions = []
     visited = set()
     for i, (y, x, idx) in enumerate(topk_coords):
         if idx in visited:
             continue
-            
+
         # Start a new region
         region = [(y, x, idx, topk_values[i].item())]
         visited.add(idx)
         queue = [(y, x, idx, topk_values[i].item())]
-        
+
         # BFS to find connected points
         while queue:
             cy, cx, _, _ = queue.pop(0)
@@ -114,12 +116,12 @@ def get_prediction_region_point(attn_scores, n_width, n_height, activation_thres
                         queue.append((ny, nx, t_idx, topk_values[j].item()))
         # (ny, nx, t_idx, score_values)
         regions.append(region)
-    
+
     # Calculate the average activation value for each region
     region_scores = []
     region_centers = []
     region_points = []
-    
+
     for region in regions:
         # Calculate average score for the region
         avg_score = sum(item[3] for item in region) / len(region)
@@ -157,7 +159,7 @@ def get_prediction_region_point(attn_scores, n_width, n_height, activation_thres
             avg_center_x = sum(x_coords) / len(x_coords)
             avg_center_y = sum(y_coords) / len(y_coords)
         region_centers.append((avg_center_x, avg_center_y))
-    
+
     # Select the region with the highest average activation value
     sorted_indices = sorted(range(len(region_scores)), key=lambda i: region_scores[i], reverse=True)
     sorted_scores = [region_scores[i] for i in sorted_indices]
@@ -224,7 +226,7 @@ def inference_focusui_token_select(
     else:
         # clear the force_queue
         logits_processor.force_queue.clear()
-    
+
     if not use_placeholder:
         assistant_starter = ""
 
@@ -256,7 +258,7 @@ def inference_focusui_token_select(
                             padding=True,
                             return_tensors="pt"
                             )
-    
+
     # prepare focusui inputs: extract example["instruction"]
     element_query_text = conversation[-1]['content'][1]['text'].strip()
     focus_inputs = tokenizer(element_query_text, return_tensors="pt")
@@ -265,6 +267,20 @@ def inference_focusui_token_select(
 
     inputs.update({'focus_input_ids': focus_input_ids, 'focus_attention_mask': focus_attention_mask})
     inputs = inputs.to(model.device)
+
+    # TODO: add args to choose from outside patch_scores and the scorer.
+    # print(f"Input keys: {inputs.keys()}")
+    image_grid_thw = inputs.get("image_grid_thw", None)
+
+    if image_inputs is not None:
+        all_scores = []
+        for idx, img in enumerate(image_inputs):
+            res = preprocess_focusui_data(ele_image=img, image_grid_thw=image_grid_thw[idx]) # The bbox argument was not passed. Hence, the bbox score is zero.
+            all_scores.append(res['patch_scores_label'])
+
+        inputs['patch_scores'] = torch.cat(all_scores, dim = 0).unsqueeze(0).to(model.device)
+        # print(f"Using patch_scores from outside.")
+
 
     # generate
     if model.apply_visual_token_select:
@@ -300,7 +316,7 @@ def inference_focusui_token_select(
     # if there are no <POINTER_TOKEN> in the input_ids or generated_ids, return the pred
     if len(pointer_pad_mask) == 0:
         return pred
-    
+
     # select (cut off) pointer_pad_mask where keep_token_mask is True
     if model.apply_visual_token_select:
         patch_score_dict = model.visual_token_selection_with_patch_scores(
@@ -313,7 +329,7 @@ def inference_focusui_token_select(
         input_ids = patch_score_dict["input_ids"]
         keep_token_mask = patch_score_dict["token_keep_mask"]  # [B, L]
         image_token_keep_mask = patch_score_dict["image_token_keep_mask"]  # [B, L]
-        
+
         pointer_pad_mask = pointer_pad_mask.masked_select(keep_token_mask[0])
 
     # otherwise, get the coordinate from the action head
@@ -327,7 +343,7 @@ def inference_focusui_token_select(
     # get the image embeddings as encoder vectors
     image_mask = (input_ids[0] == tokenizer.encode("<|image_pad|>")[0])
     image_embeds = results.hidden_states[0][0][0][image_mask] # n_image_tokens, hidden_size
-    
+
     if model.apply_visual_token_select:
         attn_scores_selected, _ = model.multi_patch_pointer_head(image_embeds, decoder_hidden_states)
         pred["attn_scores_selected"] = attn_scores_selected.tolist()

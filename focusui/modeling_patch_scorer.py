@@ -48,7 +48,7 @@ class MHATokenFeatureEnhancer(nn.Module):
 
 class PatchScorerConfig(PretrainedConfig):
     """Configuration class for PatchScorer model."""
-    
+
     model_type = "patch_scorer"
 
     def __init__(
@@ -61,7 +61,7 @@ class PatchScorerConfig(PretrainedConfig):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        
+
         self.projection_dim = projection_dim
         self.projection_dropout = projection_dropout
         self.text_token_pooling = text_token_pooling
@@ -129,14 +129,14 @@ class PatchScorerModel(PreTrainedModel):
         pixel_values: Optional[torch.FloatTensor] = None,
         image_grid_thw: Optional[torch.LongTensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
-        patch_scores_label: Optional[torch.Tensor] = None,
+        patch_scores_label: Optional[torch.Tensor] = None, # preprocess_focusui.py 中生成的 patch score label ground truth
         return_dict: Optional[bool] = True,
     ) -> Union[Tuple, dict]:
         """
         Forward pass for training and inference.
-        
+
         Args:
-            pixel_values: Image pixel values  
+            pixel_values: Image pixel values
             image_grid_thw: Image grid dimensions
             attention_mask: Text attention mask
             image_embeds: Image embeddings
@@ -144,7 +144,7 @@ class PatchScorerModel(PreTrainedModel):
         Returns:
             Dict or tuple containing embeddings and losses
         """
-        
+
         # 1) Text forward
         if text_embeds is not None:
             text_embeds = self.text_enhancer(text_embeds)  # [B, L, D]
@@ -170,7 +170,7 @@ class PatchScorerModel(PreTrainedModel):
         patch_scores_matrix = torch.bmm(
             image_embeds,                   # [B, num_v_tokens, D]
             text_embeds.transpose(-1, -2)   # [B, num_t_tokens, D] -> [B, D, num_t_tokens]
-        )                                   
+        )
         # patch_scores_matrix: [B, num_v_tokens, num_t_tokens]
 
         # Average/max over num_t_tokens to get [B, num_v_tokens]
@@ -202,7 +202,7 @@ class PatchScorerModel(PreTrainedModel):
             "patch_scores": patch_scores,
             "loss": loss,
         }
-    
+
     def compute_loss(self, patch_scores: torch.Tensor, patch_scores_label: torch.Tensor) -> torch.Tensor:
         """
         Compute KL div loss between patch scores and ground truth.

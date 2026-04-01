@@ -58,7 +58,8 @@ def load_model_and_inference(
             model_name_or_path,
             dtype=torch.bfloat16,
             device_map=device,
-            attn_implementation="flash_attention_2",
+            # attn_implementation="flash_attention_2",
+            attn_implementation="sdpa",  # "flash_attention_2" if available
         ).eval()
         model.apply_visual_token_select = apply_visual_token_select
         model.visual_reduct_ratio = visual_reduct_ratio
@@ -147,7 +148,7 @@ def normalize_bbox(bbox_x1y1x2y2: Sequence[Union[int, float]], img_width: Union[
 def do_boxes_overlap(box1, box2):
     """
     Check if two boxes overlap.
-    
+
     Each box is represented as a tuple: (x1, y1, x2, y2)
     Where (x1, y1) is the top-left and (x2, y2) is the bottom-right corner.
     """

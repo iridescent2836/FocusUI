@@ -246,3 +246,9 @@ pyrightconfig.json
 wandb/
 checkpoints/*/*
 datasets/UI-Grounding-Benchmarks/
+
+# vscode stuff
+.vscode/*
+
+# tmp files
+tmp/

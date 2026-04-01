@@ -20,7 +20,7 @@ from focusui.modeling_patch_scorer import PatchScorerConfig, PatchScorerModel
 class FocusUI_QwenVLwithVisionHeadOutputWithPast(Qwen2_5_VLCausalLMOutputWithPast):
     """
     Output class for Qwen2_5_VL with pointer head, extending the base output class.
-    
+
     Args:
         lm_loss (`torch.FloatTensor` of shape `(1,)`, *optional*):
             Language modeling loss.
@@ -86,7 +86,7 @@ class VisionHead_MultiPatch(nn.Module):
     def __init__(self, d_model, projection_dim, num_attention_heads=8, dropout_rate=0.1):
         super().__init__()
         self.d_model = d_model
-        
+
         # Note: We omit additional normalization here because Qwen2VL
         # already normalizes hidden states using RMSNorm.
         self.projection_enc = nn.Sequential(
@@ -107,7 +107,7 @@ class VisionHead_MultiPatch(nn.Module):
             dropout=dropout_rate,
             batch_first=True
         )
-        
+
         # Layer normalization and residual connection
         self.layer_norm = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout_rate)
@@ -119,7 +119,7 @@ class VisionHead_MultiPatch(nn.Module):
         hidden_state_dec,  # shape: [n_dec, d_model] there can be multiple query in one sample
         labels: Optional[torch.Tensor] = None,  # shape: [n_dec, n_enc], binary mask of patches in bbox
     ):
-        
+
         enc_input = hidden_state_enc.unsqueeze(0)
         attn_output, _ = self.self_attention(
             query=enc_input,
@@ -136,12 +136,12 @@ class VisionHead_MultiPatch(nn.Module):
         # Apply the projection networks.
         proj_enc = self.projection_enc(hidden_state_enc_ctx)  # [n_enc, d_model]
         proj_dec = self.projection_dec(hidden_state_dec)  # [n_dec, d_model]
-        
+
         # Compute scaled dot-product attention scores.
         # Scaling by sqrt(d_model) is critical regardless of variable n_enc.
         scaling = self.d_model ** 0.5
         patch_logits = torch.matmul(proj_dec, proj_enc.transpose(0, 1)) / scaling  # [n_dec, n_enc]
-        
+
         # Softmax normalization is applied along the encoder dimension.
         attn_weights = F.softmax(patch_logits, dim=-1)
 
@@ -168,7 +168,7 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
         self.pointer_loss_weight = kwargs.get("pointer_loss_weight", 1.0)
         self.lm_loss_weight = kwargs.get("lm_loss_weight", 1.0)
         self.ps_loss_weight = kwargs.get("ps_loss_weight", 1.0)
-        
+
         self.apply_visual_token_select = kwargs.get("apply_visual_token_select", True)
         self.train_visual_reduct_ratio = kwargs.get("train_visual_reduct_ratio", (0.0, 0.95))
         self.visual_reduct_ratio = kwargs.get("visual_reduct_ratio", 0.5)
@@ -182,7 +182,7 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
         )
         self.patch_scorer = PatchScorerModel(self.patch_scorer_config)
         self.patch_scorer_early_exit = kwargs.get("patch_scorer_early_exit", False)
-        
+
         # Cache latest patch_scores for retrieval after generate()
         self._last_patch_scores = None
         # Cache latest PatchScorer GPU memory stats
@@ -344,10 +344,11 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
             self._last_patch_scores = patch_scores
         elif patch_scores is not None:
             # If patch_scores is provided externally (e.g., for ablations), cache it for retrieval after `generate()`.
+            # print("patch_scores is provided externally")
             self._last_patch_scores = patch_scores
 
         ##### Visual Token Selection #####
-        if self.apply_visual_token_select and (patch_scores is not None) and (inputs_embeds.shape[1] != 1): 
+        if self.apply_visual_token_select and (patch_scores is not None) and (inputs_embeds.shape[1] != 1):
             # set spatial drop rate
             if self.training:
                 visual_reduct_ratio = np.random.uniform(self.train_visual_reduct_ratio[0], self.train_visual_reduct_ratio[1])
@@ -386,7 +387,7 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
             visual_token_percentage = 1.0
             token_keep_mask = None
             image_token_keep_mask = None
-        
+
         # for train scorer only
         if self.patch_scorer_early_exit:
             return FocusUI_QwenVLwithVisionHeadOutputWithPast(
@@ -435,7 +436,7 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
         if visual_token_indices_of_coordinates is not None:
             batch_size = input_ids.shape[0]
             pointer_losses = []
-            
+
             # Process each sample individually because the number of visual and target tokens may vary.
             for i in range(batch_size):
                 dummy_target = False
@@ -451,7 +452,7 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
                 # Identify target tokens (the ones that should attend to visual features).
                 target_mask = (token_ids == self.config.pointer_pad_token_id)
                 target_indices = torch.nonzero(target_mask, as_tuple=False).squeeze(-1)
-                
+
                 # If either visual or target tokens are missing, skip this sample.
                 if visual_indices.numel() == 0:
                     raise ValueError(f"No visual or target tokens found for sample {i}.")
@@ -464,7 +465,7 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
                     # For supervision, we assume that visual_token_indices_of_coordinates[i] is a tensor of shape (n_target,)
                     # where each element is an integer in the range [0, n_visual-1] indicating the ground-truth visual token.
                     sample_labels = multi_patch_labels[i]
-                
+
                 # Gather the corresponding hidden state representations.
                 visual_embeds = inputs_embeds[i][visual_indices]  # shape: (n_visual, d_model)
                 target_hidden = hs[target_indices]  # shape: (n_target, d_model)
@@ -473,7 +474,7 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
                 # Ensure the number of targets matches between sample and labels
                 if sample_labels.shape[0] != target_indices.shape[0]:
                     raise ValueError(f"Sample {i} has mismatched target counts: {sample_labels.shape[0]} labels but found {target_indices.shape[0]} target tokens")
-                
+
                 if self.apply_visual_token_select and image_token_keep_mask is not None:
                     sample_labels = sample_labels[:, image_token_keep_mask[i]]
 
@@ -483,10 +484,10 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
                     target_hidden,
                     labels=sample_labels,
                 )
-                
+
                 pointer_scores.append(attn_scores.detach().cpu())
                 pointer_losses.append(loss_v * 0.0 if dummy_target else loss_v)
-            
+
             pointer_loss = torch.stack(pointer_losses).mean()
 
         # Combine the LM loss and vision loss using the provided loss weights.
@@ -498,7 +499,7 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
             total_loss += self.lm_loss_weight * lm_loss
         if ps_loss is not None:
             total_loss += self.ps_loss_weight * ps_loss
-        
+
         if return_dict:
             return FocusUI_QwenVLwithVisionHeadOutputWithPast(
                 lm_loss=lm_loss,
