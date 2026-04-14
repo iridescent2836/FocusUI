@@ -1,3 +1,7 @@
+'''
+Visulizing the scoring result of focusui preprocessing.
+'''
+
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
@@ -102,22 +106,41 @@ def visualize_focusui_preprocessing(ele_image: Image.Image, ele_bbox: tuple, res
 
     plt.show()
 
-# --- 运行示例 ---
-# 1. 模拟输入
-test_path = "./datasets/Example-Data/images/1c6422e3-8eea-44db-9d70-67e74920ae02.png"
-test_path_1 = "./tmp/point_on_image.png"
-test_img =  Image.open(test_path)
-test_bbox =  [0.098,0.762,0.269,0.829] # 假设中间有一个元素
+if __name__ == "__main__":
 
-test_image_grid_thw = torch.tensor([ 1, 56, 96])  # 假设 smart resize 后是 384x384，patch size 是16，那么就是24x24的网格
-# 2. 调用你的函数得到结果
-processed_data = preprocess_focusui_data(test_img, test_bbox, image_grid_thw=test_image_grid_thw)
-# 3. 可视化
-# visualize_focusui_preprocessing(test_img, test_bbox, processed_data)
 
-patch_scores_label = processed_data.get("patch_scores_label", None)
-if patch_scores_label is not None:
-    print(f"Patch scores label shape: {patch_scores_label.shape}")
-    torch.save(patch_scores_label, "patch_scores_label.pt")
-else:
-    print("No patch scores label found in the processed data.")
+
+
+    # --- 运行示例 ---
+    # 1. 模拟输入
+    test_path = "./datasets/Example-Data/images/1c6422e3-8eea-44db-9d70-67e74920ae02.png"
+    test_path_1 = "./tmp/point_on_image.png"
+    test_img =  Image.open(test_path)
+    test_bbox =  [0.098,0.762,0.269,0.829] # 假设中间有一个元素
+
+    test_image_grid_thw = torch.tensor([ 1, 56, 96])  # 假设 smart resize 后是 384x384，patch size 是16，那么就是24x24的网格
+
+    is_visulize = True
+    is_using_bbox = False
+
+    if is_visulize:
+        if is_using_bbox:
+            processed_data = preprocess_focusui_data(test_img, test_bbox)
+        else:
+            processed_data = preprocess_focusui_data(test_img)
+
+        visualize_focusui_preprocessing(test_img, test_bbox, processed_data)
+
+
+    else:
+        if is_using_bbox:
+            processed_data = preprocess_focusui_data(test_img, test_bbox, image_grid_thw=test_image_grid_thw)
+        else:
+            processed_data = preprocess_focusui_data(test_img, image_grid_thw=test_image_grid_thw)
+
+        patch_scores_label = processed_data.get("patch_scores_label", None)
+        if patch_scores_label is not None:
+            print(f"Patch scores label shape: {patch_scores_label.shape}")
+            torch.save(patch_scores_label, "patch_scores_label.pt")
+        else:
+            print("No patch scores label found in the processed data.")

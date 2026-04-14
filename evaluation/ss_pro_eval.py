@@ -48,6 +48,7 @@ def evaluate(
         device,
         getattr(args, "apply_visual_token_select", True),
         getattr(args, "visual_reduct_ratio", 0.5),
+        getattr(args, "scorer_type", "scorer")
     )
     global IMAGE_PATCH_SIZE
     IMAGE_PATCH_SIZE = IMAGE_PATCH_SIZE_LOADED
@@ -61,10 +62,10 @@ def evaluate(
         data_all = json.load(f)
 
     random.seed(42)
-    num_samples = min(20, len(data_all))
+    num_samples = min(getattr(args, "num_samples", len(data_all)), len(data_all))
     data = random.sample(data_all, num_samples)
 
-    print(f"{len(data)} samples are randomly selected for evaluation.")
+    print(f"{len(data)} samples are randomly selected from a total number of {len(data_all)} for evaluation.")
 
     results: List[Dict] = []
     overlay_out_dir = os.path.join(args.save_path, "saliency_heatmaps")
@@ -282,6 +283,10 @@ if __name__ == "__main__":
     parser.add_argument("--apply_visual_token_select", dest="apply_visual_token_select", action="store_true")
     parser.add_argument("--no-apply_visual_token_select", dest="apply_visual_token_select", action="store_false")
     parser.add_argument("--visual_reduct_ratio", type=float, default=0.5)
+
+    # My stuff
+    parser.add_argument("--num_samples", type=int, default=20)
+    parser.add_argument("--scorer_type", type=str, default="scorer")
 
     parser.set_defaults(use_placeholder=True)
     parser.set_defaults(apply_visual_token_select=True)

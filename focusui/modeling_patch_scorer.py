@@ -186,6 +186,11 @@ class PatchScorerModel(PreTrainedModel):
         else:
             loss = None
 
+        # TODO: 这里只是为了看看只用 image_embeds 而不使用 text_embeds 的结果
+        # 修改方式：计算图像 embedding 的 L2 范数作为得分
+        # 物理意义：特征越明显的区域得分越高，与文本内容无关
+        # patch_scores = torch.norm(image_embeds, p=2, dim=-1) # [B, num_v_tokens]
+
         if not return_dict:
             return (
                 text_embeds,

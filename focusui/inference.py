@@ -187,6 +187,7 @@ def inference_focusui_token_select(
     use_placeholder=True,
     assistant_starter=assistant_starter_guiactor,
     topk=3,
+    scorer_type: str = "scorer",
     ):
     """
     conversation = [
@@ -266,20 +267,22 @@ def inference_focusui_token_select(
     focus_attention_mask = focus_inputs['attention_mask']
 
     inputs.update({'focus_input_ids': focus_input_ids, 'focus_attention_mask': focus_attention_mask})
-    inputs = inputs.to(model.device)
 
     # TODO: add args to choose from outside patch_scores and the scorer.
     # print(f"Input keys: {inputs.keys()}")
     image_grid_thw = inputs.get("image_grid_thw", None)
 
-    if image_inputs is not None:
+    # if scorer type is ssim or l2-norm, use solely image-based score type.
+    if image_inputs is not None and scorer_type in ['ssim', 'l2-norm']:
         all_scores = []
         for idx, img in enumerate(image_inputs):
-            res = preprocess_focusui_data(ele_image=img, image_grid_thw=image_grid_thw[idx]) # The bbox argument was not passed. Hence, the bbox score is zero.
+            res = preprocess_focusui_data(ele_image=img, image_grid_thw=image_grid_thw[idx], ui_graph_score_type=scorer_type) # The bbox argument was not passed. Hence, the bbox score is zero.
             all_scores.append(res['patch_scores_label'])
 
-        inputs['patch_scores'] = torch.cat(all_scores, dim = 0).unsqueeze(0).to(model.device)
-        # print(f"Using patch_scores from outside.")
+        inputs['patch_scores'] = torch.cat(all_scores, dim = 0).unsqueeze(0).to(model.device) # when input has attribute 'patch_score', the model won't call scorer module.ds
+
+
+    inputs = inputs.to(model.device)
 
 
     # generate
@@ -347,8 +350,17 @@ def inference_focusui_token_select(
     if model.apply_visual_token_select:
         attn_scores_selected, _ = model.multi_patch_pointer_head(image_embeds, decoder_hidden_states)
         pred["attn_scores_selected"] = attn_scores_selected.tolist()
-
-        # fill back attn_scores in tensor
+        # print(f"image_token_keep_mask={image_token_keep_mask}")
+        # # fill back attn_scores in tensor
+        # if isinstance(image_token_keep_mask, list):
+        #     if len(image_token_keep_mask) > 0 and torch.is_tensor(image_token_keep_mask[0]):
+        #         # 如果列表里是 Tensor，使用 stack 合并（如果是 mask 列表，通常用这个）
+        #         image_token_keep_mask = torch.stack(image_token_keep_mask)
+        #     else:
+        #         # 如果列表里是普通数字，才使用 torch.tensor
+        #         image_token_keep_mask = torch.tensor(image_token_keep_mask)
+        #     # 确保移动到正确的设备，并且通过 squeeze() 移除 stack 可能引入的多余维度 [1, N] -> [N]
+        # image_token_keep_mask = image_token_keep_mask.to(attn_scores_selected.device).squeeze()
         attn_scores = torch.zeros_like(image_token_keep_mask, dtype=attn_scores_selected.dtype)
         attn_scores = attn_scores.masked_scatter(image_token_keep_mask, attn_scores_selected)
     else:

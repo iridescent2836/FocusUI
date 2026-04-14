@@ -35,6 +35,7 @@ def load_model_and_inference(
     device: str,
     apply_visual_token_select: bool = True,
     visual_reduct_ratio: float = 0.5,
+    scorer_type: str="scorer",
 ):
     """Load model, tokenizer, processor, grounding message, inference fn, logits processor, patch size.
 
@@ -65,7 +66,7 @@ def load_model_and_inference(
         model.visual_reduct_ratio = visual_reduct_ratio
         grounding_system_message = grounding_system_message_guiactor_qwen25vl
         inference_fn = partial(
-            inference_focusui_token_select, assistant_starter=assistant_starter_guiactor,
+            inference_focusui_token_select, assistant_starter=assistant_starter_guiactor, scorer_type=scorer_type,
         )
         image_patch_size = 14
 
