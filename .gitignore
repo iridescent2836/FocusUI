@@ -252,3 +252,4 @@ datasets/UI-Grounding-Benchmarks/
 
 # tmp files
 tmp/
+*.tmp
