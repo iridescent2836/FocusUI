@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 from typing import Dict, List
+import csv
 
 import torch
 from PIL import Image
@@ -168,7 +169,7 @@ def evaluate(
     return results
 
 
-def get_metric(list_of_examples, groups=["Dev", "Creative", "CAD", "Scientific", "Office", "OS"], ui_types=["text", "icon"]):
+def get_metric(list_of_examples, metric_csv_path, groups=["Dev", "Creative", "CAD", "Scientific", "Office", "OS"], ui_types=["text", "icon"]):
     """
     Computes metrics over a list of examples and prints/plots a table.
 
@@ -261,6 +262,15 @@ def get_metric(list_of_examples, groups=["Dev", "Creative", "CAD", "Scientific",
         row = [metric] + [format_cell(results[metric].get(col)) for col in columns_order]
         metric_info += ("\t".join(row) + "\n")
     print(metric_info)
+    with open(metric_csv_path, mode="w", newline='', encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Metric'] + columns_order)
+        for metric in metrics:
+                row = [metric] + [format_cell(results[metric].get(col)) for col in columns_order]
+                writer.writerow(row)
+
+        print(f"Saved metric to {metric_csv_path}")
+
     return metric_info, results
 
 
@@ -284,13 +294,15 @@ if __name__ == "__main__":
     parser.add_argument("--no-apply_visual_token_select", dest="apply_visual_token_select", action="store_false")
     parser.add_argument("--visual_reduct_ratio", type=float, default=0.5)
 
-    # My stuff
-    parser.add_argument("--num_samples", type=int, default=20)
-    parser.add_argument("--scorer_type", type=str, default="scorer")
 
     parser.set_defaults(use_placeholder=True)
     parser.set_defaults(apply_visual_token_select=True)
     parser.set_defaults(save_saliency_heatmaps=False)
+
+    # My stuff
+    parser.add_argument("--num_samples", type=int, default=20)
+    parser.add_argument("--scorer_type", type=str, default="scorer")
+
     args = parser.parse_args()
 
     image_dir = os.path.join(args.data_path, "images")
@@ -300,6 +312,7 @@ if __name__ == "__main__":
     pred_path = os.path.join(args.save_path, "screenspot-Pro_all_preds.json")
     metric_path = os.path.join(args.save_path, "screenspot-Pro_all_preds.txt")
     metric_json_path = os.path.join(args.save_path, "screenspot-Pro_all_metrics.json")
+    metric_csv_path = os.path.join(args.save_path, "screenspot-Pro_all_preds.csv")
 
     print(f"Evaluating {args.model_name_or_path}...")
     results = evaluate(
@@ -317,7 +330,7 @@ if __name__ == "__main__":
         json.dump(results, f, indent=4)
     print(f"Saved {len(results)} predictions to {pred_path}")
 
-    metric_info, metrics = get_metric(results)
+    metric_info, metrics = get_metric(results, metric_csv_path)
     with open(metric_path, "w") as f:
         f.write(metric_info)
     print(f"Saved metric to {metric_path}")

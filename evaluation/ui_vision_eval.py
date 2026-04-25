@@ -5,8 +5,10 @@ Evaluates element grounding performance on UI-Vision benchmark,
 which contains diverse UI screenshots with text and icon elements.
 """
 import argparse
+import csv
 import json
 import os
+import random
 from typing import Dict, List
 
 import torch
@@ -56,7 +58,7 @@ def evaluate(
     # Load dataset: support HuggingFace path or local JSON directory/file
     json_filename = "element_grounding_all.json"
     json_path = os.path.join(data_path, "annotations", json_filename)
-    
+
     dataset = []
 
     with open(json_path, "r") as f:
@@ -72,6 +74,8 @@ def evaluate(
                 "group": it["group"],
             })
 
+    num_samples = min(getattr(args, "num_samples", len(dataset)), len(dataset))
+    dataset = random.sample(dataset, k=num_samples)
 
     results = []
     overlay_out_dir = os.path.join(args.save_path, "saliency_heatmaps")
@@ -186,7 +190,7 @@ def evaluate(
     return results
 
 
-def get_metric(list_of_examples):
+def get_metric(list_of_examples, metric_csv_path):
     """
     Computes metrics over a list of examples and prints/plots a table.
 
@@ -248,6 +252,16 @@ def get_metric(list_of_examples):
         row = [metric] + [format_cell(results[metric].get(col)) for col in columns_order]
         metric_info += ("\t".join(row) + "\n")
     print(metric_info)
+
+    with open(metric_csv_path, mode="w", newline='', encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Metric'] + columns_order)
+        for metric in metrics:
+                row = [metric] + [format_cell(results[metric].get(col)) for col in columns_order]
+                writer.writerow(row)
+
+        print(f"Saved metric to {metric_csv_path}")
+
     return metric_info, results
 
 
@@ -326,9 +340,9 @@ python eval/ui_vision_eval.py --save_path <path_to_save_results>
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_type", type=str, default="focusui_3b")
-    parser.add_argument("--model_name_or_path", type=str, default="checkpoints/focusui_3b")
+    parser.add_argument("--model_name_or_path", type=str, default="checkpoints/FocusUI-3B")
     parser.add_argument("--save_path", type=str, default="./")
-    parser.add_argument("--data_path", type=str, default="./dataset/ui_benchmarks/ui-vision")
+    parser.add_argument("--data_path", type=str, default="./datasets/UI-Grounding-Benchmarks/UI-Vision")
     parser.add_argument("--topk", type=int, default=3, help="Topk")
     parser.add_argument(
         "--no-placeholder",
@@ -346,6 +360,11 @@ if __name__ == "__main__":
     parser.set_defaults(apply_visual_token_select=True)
     parser.set_defaults(save_saliency_heatmaps=False)
 
+
+    # My stuff
+    parser.add_argument("--num_samples", type=int, default=20)
+    parser.add_argument("--scorer_type", type=str, default="scorer")
+
     args = parser.parse_args()
 
     save_path = args.save_path
@@ -354,6 +373,7 @@ if __name__ == "__main__":
     pred_path = f"{save_path}/uivision_preds.json"
     metric_path = f"{save_path}/uivision_metrics.txt"
     metric_json_path = f"{save_path}/uivision_metrics.json"
+    metric_csv_path = f"{save_path}/uivision_metrics.csv"
 
     print(f"Evaluating {args.model_name_or_path}...")
     results = evaluate(
@@ -370,14 +390,14 @@ if __name__ == "__main__":
     print(f"Saved {len(results)} predictions to {pred_path}")
 
     # if not os.path.exists(metric_path):
-    metric_info_domtype, results_domtype = get_metric(results)
+    metric_info_domtype, results_domtype = get_metric(results, metric_csv_path)
     metric_info_group, results_group = get_group_metric(results)
 
     combined_info = metric_info_group + "\n\n" + metric_info_domtype
     with open(metric_path, "w") as f:
         f.write(combined_info)
     print(f"Saved metric to {metric_path}")
-    
+
     combined_json = {"ByGroup": results_group, "ByDomainType": results_domtype}
     with open(metric_json_path, "w") as f:
         json.dump(combined_json, f, indent=4)

@@ -5,6 +5,7 @@ Evaluates element grounding performance on ScreenSpot-v2 benchmark,
 which contains UI screenshots across domains: mobile, desktop, and web.
 """
 import argparse
+import csv
 import json
 import os
 from typing import Dict, List
@@ -51,10 +52,15 @@ def evaluate(
         device,
         getattr(args, "apply_visual_token_select", True),
         getattr(args, "visual_reduct_ratio", 0.5),
+        getattr(args, "scorer_type", "scorer")
     )
     print(f"Loaded model from {model_name_or_path}")
 
     dataset = load_dataset(data_path)["test"]
+    # seed 保证了结果的可重复性
+    num_samples = min(getattr(args, "num_samples", len(dataset)), len(dataset))
+    dataset = dataset.shuffle(seed=42).select(range(num_samples))
+
     domain_dict = {
         "windows": "desktop",
         "macos": "desktop",
@@ -167,7 +173,7 @@ def evaluate(
     return results
 
 
-def get_metric(list_of_examples, domains=["mobile", "desktop", "web"], data_types=["text", "icon"]):
+def get_metric(list_of_examples, metric_csv_path, domains=["mobile", "desktop", "web"], data_types=["text", "icon"]):
     """
     Computes metrics over a list of examples and prints/plots a table.
 
@@ -260,6 +266,16 @@ def get_metric(list_of_examples, domains=["mobile", "desktop", "web"], data_type
         row = [metric] + [format_cell(results[metric].get(col)) for col in columns_order]
         metric_info += ("\t".join(row) + "\n")
     print(metric_info)
+
+    with open(metric_csv_path, mode="w", newline='', encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Metric'] + columns_order)
+        for metric in metrics:
+                row = [metric] + [format_cell(results[metric].get(col)) for col in columns_order]
+                writer.writerow(row)
+
+        print(f"Saved metric to {metric_csv_path}")
+
     return metric_info, results
 
 
@@ -270,9 +286,9 @@ python eval/screenSpot_v2_tokenselect.py --save_path <path_to_save_results>
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_type", type=str, default="focusui_3b")
-    parser.add_argument("--model_name_or_path", type=str, default="checkpoints/focusui_3b")
+    parser.add_argument("--model_name_or_path", type=str, default="checkpoints/FocusUI-3B")
     parser.add_argument("--save_path", type=str, default="./")
-    parser.add_argument("--data_path", type=str, default="./dataset/ScreenSpot-V2")
+    parser.add_argument("--data_path", type=str, default="./datasets/UI-Grounding-Benchmarks/ScreenSpot-V2")
     parser.add_argument("--topk", type=int, default=3, help="Topk")
     parser.add_argument(
         "--no-placeholder",
@@ -290,6 +306,10 @@ if __name__ == "__main__":
     parser.set_defaults(save_saliency_heatmaps=False)
     parser.set_defaults(apply_visual_token_select=True)
 
+    # My stuff
+    parser.add_argument("--num_samples", type=int, default=20)
+    parser.add_argument("--scorer_type", type=str, default="scorer")
+
     args = parser.parse_args()
 
     save_path = args.save_path
@@ -298,6 +318,7 @@ if __name__ == "__main__":
     pred_path = f"{save_path}/screenspot_v2_all_preds.json"
     metric_path = f"{save_path}/screenspot_v2_all_metrics.txt"
     metric_json_path = f"{save_path}/screenspot_v2_all_metrics.json"
+    metric_csv_path = f"{save_path}/screenspot_v2_metrics.csv"
 
     print(f"Evaluating {args.model_name_or_path}...")
     results = evaluate(
@@ -314,7 +335,7 @@ if __name__ == "__main__":
     print(f"Saved {len(results)} predictions to {pred_path}")
 
     # if not os.path.exists(metric_path):
-    metric_info, results = get_metric(results)
+    metric_info, results = get_metric(results, metric_csv_path)
     with open(metric_path, "w") as f:
         f.write(metric_info)
     print(f"Saved metric to {metric_path}")

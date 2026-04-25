@@ -6,9 +6,11 @@ which contains OS-level UI screenshots with support for both
 bounding box and polygon ground truth annotations.
 """
 import argparse
+import csv
 import json
 import os
 from collections import defaultdict
+import random
 from typing import Dict, List, Tuple
 
 import torch
@@ -245,6 +247,7 @@ def evaluate(
         device,
         getattr(args, "apply_visual_token_select", True),
         getattr(args, "visual_reduct_ratio", 0.5),
+        getattr(args, "scorer_type", "scorer")
     )
     print(f"Loaded model from {model_name_or_path}")
 
@@ -257,7 +260,7 @@ def evaluate(
         items = json.load(f)
 
     ds = []
-    
+
     for it in items:
         img_path_abs = os.path.join(data_path, "images", it["image_path"])
 
@@ -277,6 +280,10 @@ def evaluate(
         })
 
     dataset = ds
+
+    num_samples = min(getattr(args, "num_samples", len(dataset)), len(dataset))
+    dataset = random.sample(dataset, k=num_samples)
+
 
     results = []
 
@@ -345,7 +352,7 @@ def evaluate(
         if hit_gt(px0, py0, bbox_gt):
             ele["hit_top1"] = 1
             ele["hit_topk"] = 1
-        
+
         pred_bbox = [
             px0 - IMAGE_PATCH_SIZE / img_w,
             py0 - IMAGE_PATCH_SIZE / img_h,
@@ -362,7 +369,7 @@ def evaluate(
         for px_k, py_k in topk_points[1:]:
             if hit_gt(px_k, py_k, bbox_gt):
                 ele["hit_topk"] = 1
-            
+
             pred_bbox = [
                 px_k - IMAGE_PATCH_SIZE / img_w,
                 py_k - IMAGE_PATCH_SIZE / img_h,
@@ -373,8 +380,8 @@ def evaluate(
                 ele["overlap_topk"] = 1
 
             ele["topk_pred_bboxes"].append(pred_bbox)
-            
-        
+
+
         # Optionally save patch_saliency_heatmap_overlay
         if args.save_saliency_heatmaps:
             base_name = os.path.splitext(os.path.basename(ele["file_name"]))[0]
@@ -392,7 +399,7 @@ def evaluate(
     return results
 
 
-def get_metric(list_of_examples, buckets):
+def get_metric(list_of_examples, buckets, metric_csv_path):
     """
     Compute OS-World-G success rates by:
         1) per data type (as before)
@@ -485,9 +492,9 @@ def get_metric(list_of_examples, buckets):
             overall_group["sum_topk"] += acck
             overall_group["sum_overlap_top1"] += overlap1
             overall_group["sum_overlap_topk"] += overlapk
-        
+
     metrics = ["hit_top1", "overlap_top1", "hit_topk", "overlap_topk", "Count"]
-    
+
     def safe_rate(s, c):
         return (s / c) if c > 0 else 0.0
 
@@ -534,7 +541,25 @@ def get_metric(list_of_examples, buckets):
             metric_info += ("\t".join(row) + "\n")
     else:
         metric_info += "(No group mappings found)\n"
-    
+
+    if columns_group:
+        with open(metric_csv_path, mode="w", newline='', encoding='utf-8-sig') as f:
+            writer = csv.writer(f)
+
+            # 1. 写入表头 (Header)
+            # ["Group"] 是为了给第一列打标签，后面拼接具体的组名
+            writer.writerow(["Metric"] + columns_group)
+
+            # 2. 循环写入每一行数据
+            for metric in metrics:
+                # 获取该指标下每个 group 的值，并格式化
+                row = [metric] + [format_cell(results_group[metric].get(col)) for col in columns_group]
+                writer.writerow(row)
+
+        print(f"Saved metric to {metric_csv_path}")
+    else:
+        print("No group mappings found, skip saving CSV.")
+
     # Combine results
     results_all = {"ByGroup": results_group}
     # results_all = {"ByGroup": results_group, "ByType": results_type}
@@ -548,9 +573,9 @@ python eval/os_world_g_eval.py --save_path <path_to_save_results>
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_type", type=str, default="focusui_3b")
-    parser.add_argument("--model_name_or_path", type=str, default="checkpoints/focusui_3b")
+    parser.add_argument("--model_name_or_path", type=str, default="checkpoints/FocusUI-3B")
     parser.add_argument("--save_path", type=str, default="./")
-    parser.add_argument("--data_path", type=str, default="./dataset/OSWorld-G")
+    parser.add_argument("--data_path", type=str, default="./datasets/UI-Grounding-Benchmarks/OSWorld-G")
     parser.add_argument("--topk", type=int, default=3, help="Topk")
     parser.add_argument(
         "--no-placeholder",
@@ -570,6 +595,10 @@ if __name__ == "__main__":
 
     parser.add_argument("--pure_grounding_eval", action="store_true", default=True, help="Pure grounding evaluation mode")
 
+    # My stuff
+    parser.add_argument("--num_samples", type=int, default=20)
+    parser.add_argument("--scorer_type", type=str, default="scorer")
+
     args = parser.parse_args()
 
     save_path = args.save_path
@@ -578,6 +607,7 @@ if __name__ == "__main__":
     pred_path = f"{save_path}/osworld_g_preds.json"
     metric_path = f"{save_path}/osworld_g_metrics.txt"
     metric_json_path = f"{save_path}/osworld_g_metrics.json"
+    metric_csv_path = f"{save_path}/osworld_g_metrics.csv"
 
     print(f"Evaluating {args.model_name_or_path}...")
     results = evaluate(
@@ -599,6 +629,7 @@ if __name__ == "__main__":
     metric_info, results = get_metric(
         results,
         buckets=class_buckets,
+        metric_csv_path=metric_csv_path
     )
 
     with open(metric_path, "w") as f:
