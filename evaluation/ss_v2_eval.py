@@ -52,7 +52,9 @@ def evaluate(
         device,
         getattr(args, "apply_visual_token_select", True),
         getattr(args, "visual_reduct_ratio", 0.5),
-        getattr(args, "scorer_type", "scorer")
+        getattr(args, "scorer_type", "scorer"),
+        getattr(args, "using_combined_scorer", False),
+        getattr(args, "combined_scorer_weight", 0.5),
     )
     print(f"Loaded model from {model_name_or_path}")
 
@@ -309,6 +311,9 @@ if __name__ == "__main__":
     # My stuff
     parser.add_argument("--num_samples", type=int, default=20)
     parser.add_argument("--scorer_type", type=str, default="scorer")
+    parser.add_argument("--using_combined_scorer", dest="using_combined_scorer", action="store_true")
+    parser.add_argument("--combined_scorer_weight", type=float, default=0.5)
+    parser.set_defaults(using_combined_scorer=False)
 
     args = parser.parse_args()
 

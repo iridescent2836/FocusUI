@@ -188,6 +188,8 @@ def inference_focusui_token_select(
     assistant_starter=assistant_starter_guiactor,
     topk=3,
     scorer_type: str = "scorer",
+    using_combined_scorer: bool = False,
+    combined_scorer_weight: float = 0.5
     ):
     """
     conversation = [
@@ -250,7 +252,6 @@ def inference_focusui_token_select(
     text += assistant_starter
 
     # prepare inputs
-
     merge_patch_size = data_processor.image_processor.merge_size * data_processor.image_processor.patch_size
     image_inputs, video_inputs = process_vision_info_w_factor(conversation, image_factor=merge_patch_size)
     inputs = data_processor(text=[text],
@@ -273,7 +274,7 @@ def inference_focusui_token_select(
     image_grid_thw = inputs.get("image_grid_thw", None)
 
     # if scorer type is ssim or l2-norm, use solely image-based score type.
-    if image_inputs is not None and scorer_type in ['ssim', 'l2-norm']:
+    if image_inputs is not None and scorer_type in ['ssim', 'l2-norm', 'random']:
         all_scores = []
         for idx, img in enumerate(image_inputs):
             res = preprocess_focusui_data(ele_image=img, image_grid_thw=image_grid_thw[idx], ui_graph_score_type=scorer_type) # The bbox argument was not passed. Hence, the bbox score is zero.
@@ -292,7 +293,9 @@ def inference_focusui_token_select(
             max_new_tokens=2048 if not use_placeholder else 1,
             logits_processor=LogitsProcessorList([logits_processor]),
             return_dict_in_generate=True,
-            output_hidden_states=True
+            output_hidden_states=True,
+            using_combined_scorer=using_combined_scorer,
+            combined_scorer_weight=combined_scorer_weight,
             )  # outputs: odict_keys(['sequences', 'hidden_states', 'past_key_values'])
     else:
         results = model.generate(
@@ -322,6 +325,7 @@ def inference_focusui_token_select(
 
     # select (cut off) pointer_pad_mask where keep_token_mask is True
     if model.apply_visual_token_select:
+        # Just reused model.visual_token_selection_with_patch_scores to get token_mask
         patch_score_dict = model.visual_token_selection_with_patch_scores(
             visual_reduct_ratio=model.visual_reduct_ratio,
             patch_scores=patch_score_pred,

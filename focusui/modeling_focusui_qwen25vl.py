@@ -237,6 +237,9 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
         # debug
         verbose: bool = False,
         verbose_visual_token_selection_summary: bool = False,
+        # My stuff
+        using_combined_scorer: Optional[bool] = False,
+        combined_scorer_weight: Optional[float] = 0.5
     ) -> Union[Tuple, FocusUI_QwenVLwithVisionHeadOutputWithPast]:
 
         """
@@ -346,6 +349,28 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
             # If patch_scores is provided externally (e.g., for ablations), cache it for retrieval after `generate()`.
             # print("patch_scores is provided externally")
             self._last_patch_scores = patch_scores
+        if using_combined_scorer and patch_scores is not None and pixel_values is not None:
+            instruct_embeds = self.model.language_model.embed_tokens(focus_input_ids) if focus_input_ids is not None else None
+
+            if patch_scores_label is not None:
+                if isinstance(patch_scores_label, (list, tuple)):
+                    patch_scores_label = patch_scores_label[0]
+                if patch_scores_label.dim() == 1:
+                    patch_scores_label = patch_scores_label.unsqueeze(0)
+
+            if instruct_embeds is not None:
+                patch_scorer_results = self.patch_scorer(
+                    image_embeds=image_embeds,
+                    text_embeds=instruct_embeds,
+                    patch_scores_label=patch_scores_label,
+                    return_dict=True,
+                )
+                patch_scores_scorer = patch_scorer_results["patch_scores"]
+            # torch.lerp(start, end, weight) -> start + weight * (end - start)
+            patch_scores = torch.lerp(patch_scores_scorer, patch_scores.to(patch_scores_scorer.dtype), combined_scorer_weight)
+            self._last_patch_scores = patch_scores
+
+            print(f"using combined scorer, combined_scorer_weight={combined_scorer_weight}")
 
         ##### Visual Token Selection #####
         if self.apply_visual_token_select and (patch_scores is not None) and (inputs_embeds.shape[1] != 1):
@@ -554,6 +579,8 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
         patch_scores_label=None,
         focus_input_ids=None,
         focus_attention_mask=None,
+        using_combined_scorer=None,
+        combined_scorer_weight=None,
         **kwargs,
     ):
         # Overwritten -- in specific circumstances we don't want to forward image inputs to the model
@@ -616,6 +643,9 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
                 "patch_scores_label": patch_scores_label,
                 "focus_input_ids": focus_input_ids,
                 "focus_attention_mask": focus_attention_mask,
+                # My stuff
+                "using_combined_scorer": using_combined_scorer,
+                "combined_scorer_weight": combined_scorer_weight,
             }
         )
 

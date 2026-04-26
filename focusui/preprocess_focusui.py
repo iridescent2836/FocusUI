@@ -66,6 +66,14 @@ def smart_resize_with_factor(
 
     return h_bar, w_bar
 
+def build_random_patch_score(
+    image: Image.Image,
+    temporal_patch_size: int = 2,
+    patch_size: int = PATCH_SIZE,
+    merge_size: int = MERGE_SIZE,
+) -> np.ndarray:
+    pass
+
 
 # =================================
 # Bounding Box-Based Patch Scoring
@@ -262,123 +270,6 @@ def compute_ssim_similarity(p1: np.ndarray, p2: np.ndarray) -> float:
     )
     return score
 
-# TODO: deside wheter to combine it with build_patch_score_from_uigraph using a special args
-# using ssim method
-# def build_patch_score_from_uigraph_ssim(
-#     image: Image.Image,
-#     ui_graph_threshold: float = 0.9,
-#     mode: str = "log",
-#     temporal_patch_size: int = 2,
-#     patch_size: int = PATCH_SIZE,
-#     merge_size: int = MERGE_SIZE,
-# ) -> np.ndarray:
-#     """
-#     Compute patch scores based on UI graph clustering.
-
-#     Groups visually similar adjacent patches using Union-Find, then assigns
-#     higher scores to patches in smaller (more unique) clusters.
-
-#     Args:
-#         image: Input PIL image
-#         ui_graph_threshold: L2 distance threshold for merging adjacent patches
-#         mode: Reweighting method ("inverse", "log", or "sqrt")
-#         temporal_patch_size: Temporal dimension factor (default: 2)
-#         patch_size: Size of each patch in pixels (default: 14)
-#         merge_size: Spatial merge factor (default: 2)
-
-#     Returns:
-#         1D array of patch scores with shape (num_patches,)
-#     """
-#     ui_graph_threshold = 0.9 # TODO: delete this magical number
-
-#     # print(f"ui_graph_threshold={ui_graph_threshold}")
-#     width, height = image.size
-
-#     # Convert image to normalized numpy array
-#     image_array = np.array(image, dtype=np.float32) / 255.0
-
-#     # Ensure 3 channels
-#     if len(image_array.shape) == 2:
-#         image_array = np.stack([image_array] * 3, axis=-1)
-
-#     # Reshape for patch processing: (H, W, C) -> (T, C, H, W)
-#     patches = image_array.transpose(2, 0, 1)[None, ...]  # (1, C, H, W)
-
-#     # Replicate for temporal dimension
-#     if patches.shape[0] == 1:
-#         patches = np.tile(patches, (temporal_patch_size, 1, 1, 1))
-
-#     channel = patches.shape[1]
-#     grid_t = patches.shape[0] // temporal_patch_size
-#     grid_h = height // patch_size
-#     grid_w = width // patch_size
-
-#     # Reshape into hierarchical patch grid
-#     patches = patches.reshape(
-#         grid_t, temporal_patch_size, channel,
-#         grid_h // merge_size, merge_size, patch_size,
-#         grid_w // merge_size, merge_size, patch_size,
-#     )
-#     # Reorder: (T, H1, W1, m, m, C, tp, p, p)
-#     patches = patches.transpose(0, 3, 6, 4, 7, 2, 1, 5, 8)
-
-#     # Build UI graph using Union-Find
-#     grid_h_half = grid_h // merge_size
-#     grid_w_half = grid_w // merge_size
-#     num_patches = grid_t * grid_h_half * grid_w_half
-#     uf = UnionFind(num_patches)
-
-#     def patch_idx(t: int, i: int, j: int) -> int:
-#         return t * grid_h_half * grid_w_half + i * grid_w_half + j
-
-#     # Connect adjacent patches with similar appearance
-#     for t in range(grid_t):
-#         for i in range(grid_h_half):
-#             for j in range(grid_w_half):
-#                 current_idx = patch_idx(t, i, j)
-#                 current_patch = patches[t, i, j, ...]
-
-#                 # Check right neighbor
-#                 if j + 1 < grid_w_half:
-#                     right_patch = patches[t, i, j + 1, ...]
-#                     # print(f"ssim_similarity={compute_ssim_similarity(current_patch, right_patch)}")
-#                     if compute_ssim_similarity(current_patch, right_patch) > ui_graph_threshold:
-#                     # if np.linalg.norm(current_patch - right_patch) < ui_graph_threshold: # TODO: 这个判断是否应该属于一个 union 的条件，有没有更好的计算方式？
-#                         uf.union(current_idx, patch_idx(t, i, j + 1))
-
-#                 # Check bottom neighbor
-#                 if i + 1 < grid_h_half:
-#                     bottom_patch = patches[t, i + 1, j, ...]
-#                     # print(f"ssim_similarity={compute_ssim_similarity(current_patch, bottom_patch)}")
-#                     if compute_ssim_similarity(current_patch, bottom_patch) > ui_graph_threshold:
-#                     # if np.linalg.norm(current_patch - bottom_patch) < ui_graph_threshold:
-#                         uf.union(current_idx, patch_idx(t, i + 1, j))
-
-#     # Get cluster assignments and rerank
-#     cluster_ids = np.array([uf.find(x) for x in range(num_patches)])
-#     cluster_ids = _rerank_values(cluster_ids)
-
-#     # Compute importance weights
-#     patch_scores_merged = _reweight_patch_scores(cluster_ids, method=mode)
-
-#     # Expand to full patch grid (each merged block -> merge_size^2 patches)
-#     expanded_scores = []
-#     score_idx = 0
-
-#     for _ in range(grid_t):
-#         for _ in range(grid_h // merge_size):
-#             for _ in range(grid_w // merge_size):
-#                 block_score = patch_scores_merged[score_idx]
-#                 # Repeat for all sub-patches in this block
-#                 for _ in range(merge_size * merge_size):
-#                     expanded_scores.append(block_score)
-#                 score_idx += 1
-
-#     test = np.array(expanded_scores, dtype=np.float32)
-#     if np.allclose(test, test[0], atol=1e-5, rtol=1e-8):
-#         print(f"[WARNING] build_patch_score_from_uigraph: all patch scores are close to {test[0]}")
-
-#     return np.array(expanded_scores, dtype=np.float32)
 
 # The original implementation from the paper.
 def build_patch_score_from_uigraph(
@@ -600,9 +491,15 @@ def preprocess_focusui_data(
             patch_size=patch_size,
             scorer_type=ui_graph_score_type,
         )
+    elif ui_graph_score_type == "random":
+        num_merged_patches = (smart_w // patch_size) * (smart_h // patch_size)
+        # 生成 [0.0, 1.0) 之间的均匀分布
+        np.random.seed(42)
+        patch_score_uigraph = np.random.rand(num_merged_patches).astype(np.float32)
+        # # 生成均值为 0，标准差为 1 的分布
     else:
         raise ValueError(f"Invalid ui_graph_score_type: '{ui_graph_score_type}'. "
-                         f"Expected 'l2-norm' or 'ssim'.")
+                         f"Expected 'l2-norm', 'ssim' or 'random'.")
     # Combine scores with weights
 
     # print(f"patch_score_bbox = {patch_score_bbox.shape}")
