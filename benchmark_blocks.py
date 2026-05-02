@@ -74,7 +74,7 @@ def benchmark_uigraph_score(iters: int, images: list, scorer_type: str):
 
         for image in images:
             t0 = time.perf_counter()
-            _ = preprocess_focusui_data(image, ui_graph_score_type=scorer_type)
+            _ = preprocess_focusui_data(image, ui_graph_scorer_type=scorer_type)
             t1 = time.perf_counter()
             curr_time = t1 - t0
             times.append(curr_time)

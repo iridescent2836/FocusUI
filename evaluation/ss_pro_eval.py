@@ -6,6 +6,7 @@ which contains professional software UI screenshots across categories:
 Dev, Creative, CAD, Scientific, Office, and OS.
 """
 import argparse
+import datetime
 import json
 import os
 from typing import Dict, List
@@ -15,6 +16,10 @@ import torch
 from PIL import Image
 import random
 from tqdm import tqdm
+
+random.seed(42)
+import logging
+
 
 from evaluation.shared_grounding_eval import (
     compute_mean,
@@ -64,7 +69,6 @@ def evaluate(
     with open(data_fn, "r") as f:
         data_all = json.load(f)
 
-    random.seed(42)
     num_samples = min(getattr(args, "num_samples", len(data_all)), len(data_all))
     data = random.sample(data_all, num_samples)
 
@@ -318,6 +322,20 @@ if __name__ == "__main__":
     metric_path = os.path.join(args.save_path, "screenspot-Pro_all_preds.txt")
     metric_json_path = os.path.join(args.save_path, "screenspot-Pro_all_metrics.json")
     metric_csv_path = os.path.join(args.save_path, "screenspot-Pro_all_preds.csv")
+
+    current_date = datetime.date.today().strftime("%Y-%m-%d")
+    logger_path = f"{args.save_path}focusui-{current_date}.log"
+    print(f"logging_path: {logger_path}")
+
+    logger_prefix = f"[FocusUI-{args.model_type}-{args.scorer_type}]"
+    logging.basicConfig(
+        level=logging.INFO,
+        filename=logger_path,
+        format=logger_prefix +
+        "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        filemode='a',
+    )
+
 
     print(f"Evaluating {args.model_name_or_path}...")
     results = evaluate(

@@ -16,6 +16,9 @@ from typing import Dict, List, Tuple
 import torch
 from tqdm import tqdm
 
+random.seed(42)
+
+
 from evaluation.shared_grounding_eval import (
     do_boxes_overlap,
     format_cell,

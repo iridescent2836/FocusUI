@@ -108,9 +108,6 @@ def visualize_focusui_preprocessing(ele_image: Image.Image, ele_bbox: tuple, res
 
 if __name__ == "__main__":
 
-
-
-
     # --- 运行示例 ---
     # 1. 模拟输入
     test_path = "./datasets/Example-Data/images/1c6422e3-8eea-44db-9d70-67e74920ae02.png"
@@ -124,12 +121,17 @@ if __name__ == "__main__":
     is_using_bbox = False
 
     if is_visulize:
-        if is_using_bbox:
-            processed_data = preprocess_focusui_data(test_img, test_bbox)
-        else:
-            processed_data = preprocess_focusui_data(test_img)
+        for scorer_type in ["ssim"]:
+            processed_data = preprocess_focusui_data(test_img, ui_graph_scorer_type=scorer_type)
+            visualize_focusui_preprocessing(test_img, test_bbox, processed_data)
 
-        visualize_focusui_preprocessing(test_img, test_bbox, processed_data)
+
+        # if is_using_bbox:
+        #     processed_data = preprocess_focusui_data(test_img, test_bbox)
+        # else:
+        #     processed_data = preprocess_focusui_data(test_img)
+
+        # visualize_focusui_preprocessing(test_img, test_bbox, processed_data)
 
 
     else:

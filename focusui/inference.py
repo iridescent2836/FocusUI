@@ -12,6 +12,9 @@ from focusui.constants import (
     DEFAULT_POINTER_PAD_TOKEN,
     assistant_starter_guiactor,
 )
+import time
+import logging
+logger = logging.getLogger("FocusUI")
 
 from focusui.dataset import process_vision_info_w_factor
 
@@ -266,18 +269,21 @@ def inference_focusui_token_select(
     focus_inputs = tokenizer(element_query_text, return_tensors="pt")
     focus_input_ids = focus_inputs['input_ids']
     focus_attention_mask = focus_inputs['attention_mask']
-
     inputs.update({'focus_input_ids': focus_input_ids, 'focus_attention_mask': focus_attention_mask})
 
-    # TODO: add args to choose from outside patch_scores and the scorer.
-    # print(f"Input keys: {inputs.keys()}")
     image_grid_thw = inputs.get("image_grid_thw", None)
 
     # if scorer type is ssim or l2-norm, use solely image-based score type.
     if image_inputs is not None and scorer_type in ['ssim', 'l2-norm', 'random']:
         all_scores = []
         for idx, img in enumerate(image_inputs):
-            res = preprocess_focusui_data(ele_image=img, image_grid_thw=image_grid_thw[idx], ui_graph_score_type=scorer_type) # The bbox argument was not passed. Hence, the bbox score is zero.
+            start = time.perf_counter()
+
+            res = preprocess_focusui_data(ele_image=img, image_grid_thw=image_grid_thw[idx], ui_graph_scorer_type=scorer_type) # The bbox argument was not passed. Hence, the bbox score is zero.
+            elapsed = time.perf_counter() - start
+            logger.info(f"image_preprocess_time: {elapsed:.6f} seconds")
+
+
             all_scores.append(res['patch_scores_label'])
 
         inputs['patch_scores'] = torch.cat(all_scores, dim = 0).unsqueeze(0).to(model.device) # when input has attribute 'patch_score', the model won't call scorer module.ds
@@ -286,6 +292,7 @@ def inference_focusui_token_select(
     inputs = inputs.to(model.device)
 
 
+    start_time = time.perf_counter() # 建议使用 perf_counter 代替 time.time() 以获取高精度
     # generate
     if model.apply_visual_token_select:
         results, patch_score_pred = model.generate_with_visual_token_select(
@@ -306,6 +313,12 @@ def inference_focusui_token_select(
             output_hidden_states=True
             )  # outputs: odict_keys(['sequences', 'hidden_states', 'past_key_values'])
         patch_score_pred = None
+
+    torch.cuda.synchronize()
+
+    elapsed_time = time.perf_counter() - start_time
+
+    logger.info(f"generation_time: {elapsed_time:.4f} seconds")
 
     # decode the generated ids
     input_ids = inputs["input_ids"]
@@ -334,6 +347,7 @@ def inference_focusui_token_select(
             verbose=False
         )
         input_ids = patch_score_dict["input_ids"]
+        print(f"after afters generating, image_token_num={(input_ids[0] == model.config.image_token_id).sum().item()}")
         keep_token_mask = patch_score_dict["token_keep_mask"]  # [B, L]
         image_token_keep_mask = patch_score_dict["image_token_keep_mask"]  # [B, L]
 

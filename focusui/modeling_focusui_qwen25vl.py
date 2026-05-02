@@ -17,6 +17,10 @@ from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VLCausalL
 from focusui.trainer import rank0_print
 from focusui.modeling_patch_scorer import PatchScorerConfig, PatchScorerModel
 
+import time
+import logging
+logger = logging.getLogger("FocusUI")
+
 class FocusUI_QwenVLwithVisionHeadOutputWithPast(Qwen2_5_VLCausalLMOutputWithPast):
     """
     Output class for Qwen2_5_VL with pointer head, extending the base output class.
@@ -256,6 +260,7 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         ######## Vision encoder forward pass ########
+        start_time = time.perf_counter()
         if inputs_embeds is None:
             inputs_embeds = self.model.language_model.embed_tokens(input_ids) # shape: (batch_size, seq_len, d_model)
             if pixel_values is not None:
@@ -297,6 +302,10 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
             if attention_mask is not None:
                 attention_mask = attention_mask.to(inputs_embeds.device)
 
+        torch.cuda.synchronize()
+        elapsed_time = time.perf_counter() - start_time
+        logger.info(f"visual_encoding_time: {elapsed_time:.4f} seconds")
+        breakpoint()
         # if we get 4D attention mask we cannot calculate rope deltas anymore. TODO @raushan fixme
         if position_ids is None and (attention_mask is None or attention_mask.ndim == 2):
             # calculate RoPE index once per generation in the pre-fill stage only
@@ -335,20 +344,25 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
                     patch_scores_label = patch_scores_label.unsqueeze(0)
 
             if instruct_embeds is not None:
+                start_time = time.perf_counter()
                 patch_scorer_results = self.patch_scorer(
                     image_embeds=image_embeds,
                     text_embeds=instruct_embeds,
                     patch_scores_label=patch_scores_label,
                     return_dict=True,
                 )
+                torch.cuda.synchronize()
+                elapsed_time = time.perf_counter() - start_time
+                logger.info(f"scorer_scoring_time: {elapsed_time:.4f} seconds")
+
                 patch_scores = patch_scorer_results["patch_scores"]
                 ps_loss = patch_scorer_results["loss"]
 
             self._last_patch_scores = patch_scores
         elif patch_scores is not None:
             # If patch_scores is provided externally (e.g., for ablations), cache it for retrieval after `generate()`.
-            # print("patch_scores is provided externally")
             self._last_patch_scores = patch_scores
+
         if using_combined_scorer and patch_scores is not None and pixel_values is not None:
             instruct_embeds = self.model.language_model.embed_tokens(focus_input_ids) if focus_input_ids is not None else None
 
@@ -359,18 +373,22 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
                     patch_scores_label = patch_scores_label.unsqueeze(0)
 
             if instruct_embeds is not None:
+                start_time = time.perf_counter()
                 patch_scorer_results = self.patch_scorer(
                     image_embeds=image_embeds,
                     text_embeds=instruct_embeds,
                     patch_scores_label=patch_scores_label,
                     return_dict=True,
                 )
+                torch.cuda.synchronize()
+                elapsed_time = time.perf_counter() - start_time
+                logger.info(f"scorer_scoring_time: {elapsed_time:.4f} seconds")
+
                 patch_scores_scorer = patch_scorer_results["patch_scores"]
             # torch.lerp(start, end, weight) -> start + weight * (end - start)
             patch_scores = torch.lerp(patch_scores_scorer, patch_scores.to(patch_scores_scorer.dtype), combined_scorer_weight)
             self._last_patch_scores = patch_scores
 
-            print(f"using combined scorer, combined_scorer_weight={combined_scorer_weight}")
 
         ##### Visual Token Selection #####
         if self.apply_visual_token_select and (patch_scores is not None) and (inputs_embeds.shape[1] != 1):
@@ -424,6 +442,7 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
                 ps_loss=ps_loss,
             )
 
+        start_time = time.perf_counter()
         outputs = self.model(
             input_ids=None,
             position_ids=position_ids,
@@ -436,6 +455,9 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
             return_dict=return_dict,
             cache_position=cache_position,
         )
+        torch.cuda.synchronize()
+        elapsed_time = time.perf_counter() - start_time
+        logger.info(f"llm_time: {elapsed_time}")
 
         hidden_states = outputs[0] # shape: (batch_size, seq_len, d_model)
         logits = self.lm_head(hidden_states)

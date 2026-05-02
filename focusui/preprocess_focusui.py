@@ -270,6 +270,22 @@ def compute_ssim_similarity(p1: np.ndarray, p2: np.ndarray) -> float:
     )
     return score
 
+def compute_hist_similarity(p1: np.ndarray, p2: np.ndarray, bins=16) -> float:
+    hist1, _ = np.histogram(p1.flatten(), bins=bins, range=(0,1), density=True)
+    hist2, _ = np.histogram(p2.flatten(), bins=bins, range=(0,1), density=True)
+
+    return np.sum(np.minimum(hist1, hist2))  # histogram intersection
+
+
+def compute_ncc_similarity(p1: np.ndarray, p2: np.ndarray, eps: float =1e-8) -> float:
+    v1 = p1.flatten()
+    v2 = p2.flatten()
+
+    v1 = v1 - v1.mean()
+    v2 = v2 - v2.mean()
+
+    denom = (np.linalg.norm(v1) * np.linalg.norm(v2)) + eps
+    return np.dot(v1, v2) / denom
 
 # The original implementation from the paper.
 def build_patch_score_from_uigraph(
@@ -299,7 +315,7 @@ def build_patch_score_from_uigraph(
         1D array of patch scores with shape (num_patches,)
     """
 
-    if scorer_type not in ["l2-norm", "ssim"]:
+    if scorer_type not in ["l2-norm", "ssim", "hist", "ncc"]:
         raise ValueError(f"preprocess_focusui.build_patdh_score_from_uigraph: Invalid scorer_type={scorer_type}, 'ssim' and 'l2-norm' are expected.")
 
     if scorer_type == "ssim" and ui_graph_threshold >= 1:
@@ -345,6 +361,8 @@ def build_patch_score_from_uigraph(
     def patch_idx(t: int, i: int, j: int) -> int:
         return t * grid_h_half * grid_w_half + i * grid_w_half + j
 
+
+    tmp_similarity_scores = []
     # Connect adjacent patches with similar appearance
     for t in range(grid_t):
         for i in range(grid_h_half):
@@ -362,6 +380,16 @@ def build_patch_score_from_uigraph(
                         if compute_ssim_similarity(current_patch, right_patch) > ui_graph_threshold:
                         # if np.linalg.norm(current_patch - right_patch) < ui_graph_threshold: # TODO: 这个判断是否应该属于一个 union 的条件，有没有更好的计算方式？
                             uf.union(current_idx, patch_idx(t, i, j + 1))
+                    elif scorer_type == "hist":
+                        tmp_similarity_scores.append(compute_hist_similarity(current_patch, right_patch))
+                        if compute_hist_similarity(current_patch, right_patch) > ui_graph_threshold:
+                            uf.union(current_idx, patch_idx(t, i, j + 1))
+                    elif scorer_type == "ncc":
+                        tmp_similarity_scores.append(compute_ncc_similarity(current_patch, right_patch))
+
+                        if compute_ncc_similarity(current_patch, right_patch) > ui_graph_threshold:
+                            uf.union(current_idx, patch_idx(t, i, j + 1))
+
 
                 # Check bottom neighbor
                 if i + 1 < grid_h_half:
@@ -371,8 +399,27 @@ def build_patch_score_from_uigraph(
                             uf.union(current_idx, patch_idx(t, i + 1, j))
                     elif scorer_type == "ssim":
                         if compute_ssim_similarity(current_patch, bottom_patch) > ui_graph_threshold:
-                        # if np.linalg.norm(current_patch - bottom_patch) < ui_graph_threshold:
                             uf.union(current_idx, patch_idx(t, i + 1, j))
+                    elif scorer_type == "hist":
+                        tmp_similarity_scores.append(compute_hist_similarity(current_patch, bottom_patch))
+                        if compute_hist_similarity(current_patch, bottom_patch) > ui_graph_threshold:
+                            uf.union(current_idx, patch_idx(t, i + 1, j))
+                    elif scorer_type == "ncc":
+                        tmp_similarity_scores.append(compute_ncc_similarity(current_patch, bottom_patch))
+
+                        if compute_ncc_similarity(current_patch, bottom_patch) > ui_graph_threshold:
+                            uf.union(current_idx, patch_idx(t, i + 1, j))
+    tmp_similarity_scores = np.array(tmp_similarity_scores)
+
+    # 计算各分位数
+
+    # if scorer_type in ['ncc', 'hist']:
+    #     quantiles = np.percentile(tmp_similarity_scores, [50, 70, 90, 95])
+
+    #     print(f"Stats: Mean={tmp_similarity_scores.mean():.4f}, Std={tmp_similarity_scores.std():.4f}, "
+    #         f"P50={quantiles[0]:.4f}, P70={quantiles[1]:.4f}, P90={quantiles[2]:.4f}, P95={quantiles[3]:.4f}, "
+    #         f"Max={tmp_similarity_scores.max():.4f}")
+
 
     # Get cluster assignments and rerank
     cluster_ids = np.array([uf.find(x) for x in range(num_patches)])
@@ -433,7 +480,7 @@ def preprocess_focusui_data(
     max_pixels: int = MAX_PIXELS,
     patch_size: int = PATCH_SIZE,
     merge_size: int = MERGE_SIZE,
-    ui_graph_score_type: str = "l2-norm",
+    ui_graph_scorer_type: str = "l2-norm",
 ) -> Dict[str, torch.Tensor]:
     """
     Generate FocusUI training data for a single sample.
@@ -473,33 +520,48 @@ def preprocess_focusui_data(
         patch_score_bbox = np.zeros(num_merged_patches, dtype=np.float32)
 
     # Compute UI graph-based patch scores
-    if ui_graph_score_type == "l2-norm":
+    if ui_graph_scorer_type == "l2-norm":
         # print("using l2-norm scores")
         patch_score_uigraph = build_patch_score_from_uigraph(
             resized_image,
             ui_graph_threshold=2.0, # NOTE: 这个在调用 ssim 的时候应该小于1，暂时还没有区分 ssim 和 l2 norm 这两种方法
             mode='log',
             patch_size=patch_size,
-            scorer_type=ui_graph_score_type,
+            scorer_type=ui_graph_scorer_type,
         )
-    elif ui_graph_score_type == "ssim":
+    elif ui_graph_scorer_type == "ssim":
         # print("using ssim-scores")
         patch_score_uigraph = build_patch_score_from_uigraph(
             resized_image,
             ui_graph_threshold=0.9, # NOTE: 这个在调用 ssim 的时候应该小于1，暂时还没有区分 ssim 和 l2 norm 这两种方法
             mode='log',
             patch_size=patch_size,
-            scorer_type=ui_graph_score_type,
+            scorer_type=ui_graph_scorer_type,
         )
-    elif ui_graph_score_type == "random":
+    elif ui_graph_scorer_type == "hist":
+        patch_score_uigraph = build_patch_score_from_uigraph(
+            resized_image,
+            ui_graph_threshold=15.5,
+            patch_size=patch_size,
+            scorer_type=ui_graph_scorer_type,
+        )
+    elif ui_graph_scorer_type == "ncc":
+        patch_score_uigraph = build_patch_score_from_uigraph(
+            resized_image,
+            ui_graph_threshold=0.7,
+            mode='log',
+            patch_size=patch_size,
+            scorer_type=ui_graph_scorer_type,
+        )
+    elif ui_graph_scorer_type == "random":
         num_merged_patches = (smart_w // patch_size) * (smart_h // patch_size)
         # 生成 [0.0, 1.0) 之间的均匀分布
         np.random.seed(42)
         patch_score_uigraph = np.random.rand(num_merged_patches).astype(np.float32)
         # # 生成均值为 0，标准差为 1 的分布
     else:
-        raise ValueError(f"Invalid ui_graph_score_type: '{ui_graph_score_type}'. "
-                         f"Expected 'l2-norm', 'ssim' or 'random'.")
+        raise ValueError(f"Invalid ui_graph_score_type: '{ui_graph_scorer_type}'. "
+                         f"Expected 'l2-norm', 'ssim', 'hist', 'ncc' or 'random'.")
     # Combine scores with weights
 
     # print(f"patch_score_bbox = {patch_score_bbox.shape}")

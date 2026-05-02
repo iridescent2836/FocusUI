@@ -14,6 +14,9 @@ import torch
 from datasets import load_dataset
 from tqdm import tqdm
 
+random.seed(42)
+
+
 from evaluation.shared_grounding_eval import (
     compute_mean,
     do_boxes_overlap,
