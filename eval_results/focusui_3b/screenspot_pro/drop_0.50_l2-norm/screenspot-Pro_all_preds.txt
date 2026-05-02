@@ -1,6 +1,0 @@
-Tab-delimited Table for Excel:
-	Dev-text	Dev-icon	Dev-avg	Creative-text	Creative-icon	Creative-avg	CAD-text	CAD-icon	CAD-avg	Scientific-text	Scientific-icon	Scientific-avg	Office-text	Office-icon	Office-avg	OS-text	OS-icon	OS-avg	All-text	All-icon	All-avg
-hit_top1	0.00	N/A	0.00	0.00	0.00	0.00	40.00	N/A	40.00	66.67	0.00	57.14	100.00	100.00	100.00	0.00	N/A	0.00	50.00	25.00	45.00
-overlap_top1	0.00	N/A	0.00	0.00	0.00	0.00	40.00	N/A	40.00	83.33	0.00	71.43	100.00	100.00	100.00	0.00	N/A	0.00	56.25	25.00	50.00
-hit_topk	0.00	N/A	0.00	0.00	0.00	0.00	40.00	N/A	40.00	66.67	0.00	57.14	100.00	100.00	100.00	0.00	N/A	0.00	50.00	25.00	45.00
-overlap_topk	0.00	N/A	0.00	0.00	0.00	0.00	60.00	N/A	60.00	83.33	0.00	71.43	100.00	100.00	100.00	0.00	N/A	0.00	62.50	25.00	55.00
