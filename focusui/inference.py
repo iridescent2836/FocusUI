@@ -274,7 +274,7 @@ def inference_focusui_token_select(
     image_grid_thw = inputs.get("image_grid_thw", None)
 
     # if scorer type is ssim or l2-norm, use solely image-based score type.
-    if image_inputs is not None and scorer_type in ['ssim', 'l2-norm', 'random']:
+    if image_inputs is not None and scorer_type in ['ssim', 'l2-norm', 'random', 'hist', 'ncc']:
         all_scores = []
         for idx, img in enumerate(image_inputs):
             start = time.perf_counter()

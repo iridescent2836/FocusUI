@@ -305,7 +305,6 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
         torch.cuda.synchronize()
         elapsed_time = time.perf_counter() - start_time
         logger.info(f"visual_encoding_time: {elapsed_time:.4f} seconds")
-        breakpoint()
         # if we get 4D attention mask we cannot calculate rope deltas anymore. TODO @raushan fixme
         if position_ids is None and (attention_mask is None or attention_mask.ndim == 2):
             # calculate RoPE index once per generation in the pre-fill stage only

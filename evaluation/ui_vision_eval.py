@@ -14,6 +14,7 @@ from typing import Dict, List
 import torch
 from tqdm import tqdm
 random.seed(42)
+import logging
 
 from evaluation.shared_grounding_eval import (
     compute_mean,
@@ -78,8 +79,9 @@ def evaluate(
                 "group": it["group"],
             })
 
-    num_samples = min(getattr(args, "num_samples", len(dataset)), len(dataset))
-    dataset = random.sample(dataset, k=num_samples)
+    if getattr(args, "using_random_samples", False):
+        num_samples = min(getattr(args, "num_samples", len(dataset)), len(dataset))
+        dataset = random.sample(dataset, k=num_samples)
 
     results = []
     overlay_out_dir = os.path.join(args.save_path, "saliency_heatmaps")
@@ -371,8 +373,21 @@ if __name__ == "__main__":
     parser.add_argument("--using_combined_scorer", dest="using_combined_scorer", action="store_true")
     parser.add_argument("--combined_scorer_weight", type=float, default=0.5)
     parser.set_defaults(using_combined_scorer=False)
+    parser.add_argument("--using_random_samples", dest="using_random_samples", action="store_true")
+    parser.set_defaults(using_random_samples=False)
 
     args = parser.parse_args()
+    logger_path = os.path.join(args.save_path, f"screenspot_Pro_all.log")
+    print(f"logging_path: {logger_path}")
+
+    logger_prefix = f"[FocusUI-{args.model_type}-{args.scorer_type}]"
+    logging.basicConfig(
+        level=logging.INFO,
+        filename=logger_path,
+        format=logger_prefix +
+        "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        filemode='a',
+    )
 
     save_path = args.save_path
     if not os.path.exists(save_path):

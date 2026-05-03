@@ -15,8 +15,8 @@ from typing import Dict, List, Tuple
 
 import torch
 from tqdm import tqdm
-
 random.seed(42)
+import logging
 
 
 from evaluation.shared_grounding_eval import (
@@ -285,9 +285,9 @@ def evaluate(
         })
 
     dataset = ds
-
-    num_samples = min(getattr(args, "num_samples", len(dataset)), len(dataset))
-    dataset = random.sample(dataset, k=num_samples)
+    if getattr(args, "using_random_samples", False):
+        num_samples = min(getattr(args, "num_samples", len(dataset)), len(dataset))
+        dataset = random.sample(dataset, k=num_samples)
 
 
     results = []
@@ -606,7 +606,8 @@ if __name__ == "__main__":
     parser.add_argument("--using_combined_scorer", dest="using_combined_scorer", action="store_true")
     parser.add_argument("--combined_scorer_weight", type=float, default=0.5)
     parser.set_defaults(using_combined_scorer=False)
-
+    parser.add_argument("--using_random_samples", dest="using_random_samples", action="store_true")
+    parser.set_defaults(using_random_samples=False)
     args = parser.parse_args()
 
     save_path = args.save_path
@@ -616,6 +617,17 @@ if __name__ == "__main__":
     metric_path = f"{save_path}/osworld_g_metrics.txt"
     metric_json_path = f"{save_path}/osworld_g_metrics.json"
     metric_csv_path = f"{save_path}/osworld_g_metrics.csv"
+    logger_path = os.path.join(args.save_path, f"screenspot_Pro_all.log")
+    print(f"logging_path: {logger_path}")
+
+    logger_prefix = f"[FocusUI-{args.model_type}-{args.scorer_type}]"
+    logging.basicConfig(
+        level=logging.INFO,
+        filename=logger_path,
+        format=logger_prefix +
+        "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        filemode='a',
+    )
 
     print(f"Evaluating {args.model_name_or_path}...")
     results = evaluate(

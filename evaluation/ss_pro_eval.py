@@ -67,12 +67,12 @@ def evaluate(
     # print(f"Loaded {len(data)} examples from {data_fn}")
 
     with open(data_fn, "r") as f:
-        data_all = json.load(f)
+        data = json.load(f)
 
-    num_samples = min(getattr(args, "num_samples", len(data_all)), len(data_all))
-    data = random.sample(data_all, num_samples)
+    if getattr(args, "using_random_samples", False):
+        num_samples = min(getattr(args, "num_samples", len(data)), len(data))
+        data = random.sample(data, num_samples)
 
-    print(f"{len(data)} samples are randomly selected from a total number of {len(data_all)} for evaluation.")
 
     results: List[Dict] = []
     overlay_out_dir = os.path.join(args.save_path, "saliency_heatmaps")
@@ -311,6 +311,8 @@ if __name__ == "__main__":
     parser.add_argument("--using_combined_scorer", dest="using_combined_scorer", action="store_true")
     parser.add_argument("--combined_scorer_weight", type=float, default=0.5)
     parser.set_defaults(using_combined_scorer=False)
+    parser.add_argument("--using_random_samples", dest="using_random_samples", action="store_true")
+    parser.set_defaults(using_random_samples=False)
 
     args = parser.parse_args()
 
@@ -323,8 +325,7 @@ if __name__ == "__main__":
     metric_json_path = os.path.join(args.save_path, "screenspot-Pro_all_metrics.json")
     metric_csv_path = os.path.join(args.save_path, "screenspot-Pro_all_preds.csv")
 
-    current_date = datetime.date.today().strftime("%Y-%m-%d")
-    logger_path = f"{args.save_path}focusui-{current_date}.log"
+    logger_path = os.path.join(args.save_path, f"screenspot_Pro_all.log")
     print(f"logging_path: {logger_path}")
 
     logger_prefix = f"[FocusUI-{args.model_type}-{args.scorer_type}]"

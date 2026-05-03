@@ -18,7 +18,6 @@ def parse_log_file(file_path):
     parsed_data = []
     current_record = {}
 
-    seen_the_1st_round = False
     seen = []
 
     for line in lines:
@@ -46,20 +45,6 @@ def parse_log_file(file_path):
                 parsed_data.append(current_record.copy())
                 current_record = {}
                 seen = []
-
-
-            # # 使用时间戳作为一组数据的唯一标识或近似分组
-            # if "image preprocess time" in metric_name:
-            #     # 如果前一组已经完整，则存入列表，开启新的一组
-            #     if current_record and all(k in current_record for k in ['image_preprocess_time', 'visual_encoding_time', 'generation_time']):
-            #         parsed_data.append(current_record.copy())
-            #         current_record = {}
-            #     current_record['timestamp'] = timestamp
-            #     current_record['image_preprocess_time'] = value
-            # elif "visual encoding time" in metric_name:
-            #     current_record['visual_encoding_time'] = value
-            # elif "generation time" in metric_name:
-            #     current_record['generation_time'] = value
 
     # 补充最后一个未添加的完整组
     if current_record and all(k in current_record for k in ['image_preprocess_time', 'visual_encoding_time', 'generation_time']):
