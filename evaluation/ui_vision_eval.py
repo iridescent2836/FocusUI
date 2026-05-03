@@ -377,6 +377,14 @@ if __name__ == "__main__":
     parser.set_defaults(using_random_samples=False)
 
     args = parser.parse_args()
+
+    save_path = args.save_path
+    if not os.path.exists(save_path):
+        os.makedirs(save_path, exist_ok=True)
+    pred_path = f"{save_path}/uivision_preds.json"
+    metric_path = f"{save_path}/uivision_metrics.txt"
+    metric_json_path = f"{save_path}/uivision_metrics.json"
+    metric_csv_path = f"{save_path}/uivision_metrics.csv"
     logger_path = os.path.join(args.save_path, f"screenspot_Pro_all.log")
     print(f"logging_path: {logger_path}")
 
@@ -389,13 +397,6 @@ if __name__ == "__main__":
         filemode='a',
     )
 
-    save_path = args.save_path
-    if not os.path.exists(save_path):
-        os.makedirs(save_path, exist_ok=True)
-    pred_path = f"{save_path}/uivision_preds.json"
-    metric_path = f"{save_path}/uivision_metrics.txt"
-    metric_json_path = f"{save_path}/uivision_metrics.json"
-    metric_csv_path = f"{save_path}/uivision_metrics.csv"
 
     print(f"Evaluating {args.model_name_or_path}...")
     results = evaluate(

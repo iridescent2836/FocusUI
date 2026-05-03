@@ -347,7 +347,6 @@ def inference_focusui_token_select(
             verbose=False
         )
         input_ids = patch_score_dict["input_ids"]
-        print(f"after afters generating, image_token_num={(input_ids[0] == model.config.image_token_id).sum().item()}")
         keep_token_mask = patch_score_dict["token_keep_mask"]  # [B, L]
         image_token_keep_mask = patch_score_dict["image_token_keep_mask"]  # [B, L]
 
