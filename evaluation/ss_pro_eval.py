@@ -323,7 +323,7 @@ if __name__ == "__main__":
     pred_path = os.path.join(args.save_path, "screenspot-Pro_all_preds.json")
     metric_path = os.path.join(args.save_path, "screenspot-Pro_all_preds.txt")
     metric_json_path = os.path.join(args.save_path, "screenspot-Pro_all_metrics.json")
-    metric_csv_path = os.path.join(args.save_path, "screenspot-Pro_all_preds.csv")
+    metric_csv_path = os.path.join(args.save_path, "screenspot-Pro_all_metrics.csv")
 
     logger_path = os.path.join(args.save_path, f"screenspot_Pro_all.log")
     print(f"logging_path: {logger_path}")

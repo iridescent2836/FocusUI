@@ -29,3 +29,5 @@ python -m evaluation.ss_v2_eval \
     --model_type "${MODEL_TYPE}" \
     --no-apply_visual_token_select \
     --data_path "${UI_GROUNDING_BENCH_BASE_DIR}/ScreenSpot-V2"
+
+# 1272 images

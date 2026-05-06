@@ -29,3 +29,5 @@ python -m evaluation.ui_vision_eval \
     --model_type "${MODEL_TYPE}" \
     --no-apply_visual_token_select \
     --data_path "${UI_GROUNDING_BENCH_BASE_DIR}/UI-Vision"
+
+# 5479 images

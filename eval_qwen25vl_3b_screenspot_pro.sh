@@ -29,3 +29,6 @@ python -m evaluation.ss_pro_eval \
     --model_type "${MODEL_TYPE}" \
     --no-apply_visual_token_select \
     --data_path "${UI_GROUNDING_BENCH_BASE_DIR}/ScreenSpot-Pro"
+
+
+# 1581 images
