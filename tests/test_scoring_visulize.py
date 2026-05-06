@@ -95,7 +95,7 @@ def visualize_focusui_preprocessing(ele_image: Image.Image, ele_bbox: tuple, res
 
     axes[1, 2].imshow(resized_img)
     axes[1, 2].imshow(final_merged_2d, cmap='jet', alpha=0.5,
-                      extent=(0, smart_w, smart_h, 0), interpolation='bilinear')
+                      extent=(0, smart_w, smart_h, 0),    interpolation='nearest' )
     axes[1, 2].set_title("6. Final Label Overlay")
 
     save_overlay_only(resized_img, final_merged_2d, smart_w, smart_h)
@@ -110,7 +110,8 @@ if __name__ == "__main__":
 
     # --- 运行示例 ---
     # 1. 模拟输入
-    test_path = "./datasets/Example-Data/images/1c6422e3-8eea-44db-9d70-67e74920ae02.png"
+    # test_path = "./datasets/Example-Data/images/1c6422e3-8eea-44db-9d70-67e74920ae02.png"
+    test_path = "/home/iridescent/Code/FocusUI/datasets/UI-Grounding-Benchmarks/OSWorld-G/images/0lp8IshCDB.png"
     test_path_1 = "./tmp/point_on_image.png"
     test_img =  Image.open(test_path)
     test_bbox =  [0.098,0.762,0.269,0.829] # 假设中间有一个元素

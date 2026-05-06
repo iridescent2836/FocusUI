@@ -246,6 +246,7 @@ pyrightconfig.json
 wandb/
 checkpoints/*/*
 datasets/UI-Grounding-Benchmarks/
+datasets/FocusUI-Training-Data/
 
 # vscode stuff
 .vscode/*

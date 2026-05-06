@@ -68,7 +68,7 @@ def reformat_coordinates(text):
             target_text,
             text
         )
-    
+
     coordinates = []
     all_matches.sort(key=lambda x: x[0])
     # Extract coordinates in order
@@ -88,7 +88,7 @@ def reformat_coordinates(text):
             y2 = adjust_coord(ast.literal_eval(y2_str))
             coordinates.append((x1, y1))
             coordinates.append((x2, y2))
-    
+
     return text, coordinates
 
 def get_token_index(image_processor, image, point_x, point_y):
@@ -102,7 +102,7 @@ def get_token_index(image_processor, image, point_x, point_y):
     """
     if len(image) != 1:
         raise ValueError(f"Expected 1 image, got {len(image)}")
-    
+
     # get the original image size and the resized image size
     image = image[0]
     w, h = image.size
@@ -111,7 +111,7 @@ def get_token_index(image_processor, image, point_x, point_y):
     merge_patch_size = image_processor.patch_size * image_processor.merge_size
     x_index = math.floor(px / merge_patch_size)
     y_index = math.floor(py / merge_patch_size)
-    
+
     visual_token_index = y_index * (w // merge_patch_size) + x_index
 
     # merge all above print into one line
@@ -153,9 +153,9 @@ def get_multi_patch_labels(image_processor, image, bbox_gt):
             patch_y_min = y_idx * merge_patch_size
             patch_x_max = patch_x_min + merge_patch_size
             patch_y_max = patch_y_min + merge_patch_size
-            
+
             # Check if patch overlaps with the bounding box
-            if not (patch_x_max <= x_min or patch_x_min >= x_max or 
+            if not (patch_x_max <= x_min or patch_x_min >= x_max or
                     patch_y_max <= y_min or patch_y_min >= y_max):
                 # Calculate patch index in the flattened grid
                 patch_idx = y_idx * grid_w + x_idx
@@ -414,8 +414,8 @@ class LazySupervisedDataset(Dataset):
             ele_bbox=element_bbox_gt,
             min_pixels=self.processor.image_processor.min_pixels,
             max_pixels=self.processor.image_processor.max_pixels,
-            # gt_bbox_weight=1.0,
-            # gt_uigraph_weight=1.0,
+            gt_bbox_weight=1.0,
+            gt_uigraph_weight=0,
             tokenizer=self.tokenizer,  # self.tokenizer,
             instruction=element_query_text,
             patch_size=self.processor.image_processor.patch_size,
@@ -444,7 +444,7 @@ class LazySupervisedDataset(Dataset):
             "bbox_gt": data_dict["bbox_gt"][0],
             "pixel_values": data_dict["pixel_values"],
             "image_grid_thw": data_dict["image_grid_thw"],
-            "multi_patch_labels": data_dict["multi_patch_labels"][0],   # add multi_patch_labels   
+            "multi_patch_labels": data_dict["multi_patch_labels"][0],   # add multi_patch_labels
             "patch_scores_label": focusui_data_dict["patch_scores_label"],
             "focus_input_ids": focusui_data_dict["focus_input_ids"],
             "focus_attention_mask": focusui_data_dict["focus_attention_mask"],
@@ -456,16 +456,16 @@ class LazySupervisedDataset(Dataset):
 
         # return None if the input_ids is longer than the model_max_length
         n_image_tokens = (
-            data_dict["image_grid_thw"][0][0] * 
-            data_dict["image_grid_thw"][0][1] * 
-            data_dict["image_grid_thw"][0][2] / 
-            self.processor.image_processor.merge_size / 
+            data_dict["image_grid_thw"][0][0] *
+            data_dict["image_grid_thw"][0][1] *
+            data_dict["image_grid_thw"][0][2] /
+            self.processor.image_processor.merge_size /
             self.processor.image_processor.merge_size
         )
         if (len(data_dict["input_ids"]) + n_image_tokens) > self.tokenizer.model_max_length:
             rank0_print(f"=== Removed data_dict {i} because it is longer than the model_max_length: {len(data_dict['input_ids'])} + {n_image_tokens} > {self.tokenizer.model_max_length}")
             return None
-        
+
         return data_dict
 
     def preprocess_qwenvl(
@@ -493,7 +493,7 @@ class LazySupervisedDataset(Dataset):
         visual_token_indices_of_coordinates = []
         multi_patch_labels = []
         bbox_gt = None
-        
+
         image_list = []
         image_index = 0
 
@@ -535,14 +535,14 @@ class LazySupervisedDataset(Dataset):
                 conv = {"role": role, "content": image_placeholders + [{"type": "text", "text": content}]}
 
                 merge_patch_size = processor.image_processor.merge_size * processor.image_processor.patch_size
-                
+
                 image_inputs, _ = process_vision_info_w_factor(
                     conversations=[conv],
                     image_factor=merge_patch_size,
                 ) # list of PIL.Image.Image
 
                 image_list.extend(image_inputs)
-                
+
                 templated_conv = tokenizer.apply_chat_template(
                     conversation=[conv], chat_template=chat_template, tokenize=False
                 )
@@ -554,7 +554,7 @@ class LazySupervisedDataset(Dataset):
                 else:
                     pixel_values = torch.concat([pixel_values, inputs["pixel_values"]], dim=0)
                     image_grid_thw = torch.concat([image_grid_thw, inputs["image_grid_thw"]], dim=0)
-            
+
             else:
                 if role in ["user", "system"]:
                     conv = {
@@ -592,7 +592,7 @@ class LazySupervisedDataset(Dataset):
                                     processor.image_processor,
                                     image_list,
                                     conv["bbox_gt"]
-                                )  
+                                )
                                 multi_patch_labels.append(patch_mask)
                                 # update the bbox_gt
                                 if bbox_gt is None:
@@ -637,7 +637,7 @@ class LazySupervisedDataset(Dataset):
         if pixel_values is not None:
             data_dict["pixel_values"] = pixel_values
             data_dict["image_grid_thw"] = image_grid_thw
-        
+
         data_dict["bbox_gt"] = bbox_gt
         data_dict["coordinates"] = coordinates
         data_dict["visual_token_indices_of_coordinates"] = visual_token_indices_of_coordinates

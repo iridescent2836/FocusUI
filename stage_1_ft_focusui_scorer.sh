@@ -9,11 +9,11 @@ output_dir="checkpoints/${model_type}_ft_scorer"
 export WANDB_NAME="FocusUI_Qwen25VL_3B_FT_PatchScorer"
 
 # === GPU Assignment ===
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 
 
 # === Training Command ===
-torchrun --nproc_per_node=1 --master_port=29666 \
+torchrun --nproc_per_node=8 --master_port=29666 \
   train_focusui.py \
   --deepspeed ./scripts/zero2.json \
   --data_path data/data_config.yaml \
@@ -58,4 +58,4 @@ torchrun --nproc_per_node=1 --master_port=29666 \
   --train_patch_scorer_only True \
   --focus_ui_train_visual_reduct_ratio_min 0.0 \
   --focus_ui_train_visual_reduct_ratio_max 0.95 \
-  --focus_ui_visual_reduct_ratio 0.5
+  --focus_ui_visual_reduct_ratio 0.5 

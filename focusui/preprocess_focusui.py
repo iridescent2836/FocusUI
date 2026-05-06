@@ -441,6 +441,9 @@ def build_patch_score_from_uigraph(
                     expanded_scores.append(block_score)
                 score_idx += 1
 
+    # unique_ids, counts = np.unique(cluster_ids, return_counts=True)
+    # breakpoint()
+
     return np.array(expanded_scores, dtype=np.float32)
 
 
@@ -569,10 +572,12 @@ def preprocess_focusui_data(
     patch_scores_label = (
         gt_bbox_weight * patch_score_bbox +
         gt_uigraph_weight * patch_score_uigraph
-    )
+    ) # in [0, 0.5], because patch_score_uigraph in [0, 1] and gt_uigraph_weight is 0.5
+
     patch_scores_label = np.clip(patch_scores_label, 0, 1)
     # Scale from [0, 1] to [-1, 1] for training
-    patch_scores_label = patch_scores_label * 2 - 1
+    patch_scores_label = patch_scores_label * 2 - 1 # in [-1, 0]
+    # in default setting, patch_scores_label is (-1, 0)
 
     # Merge patches to match Qwen's spatial merge factor
     patch_scores_merged = merge_patches_mean(patch_scores_label)
