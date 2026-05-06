@@ -1,0 +1,4 @@
+datasets:
+  - json_path: datasets/FocusUI-Training-Data/guiact_bbox_omni_0_3_filtered.json
+    images_folder: datasets/GUI-Actor-Data/GUIAct/web_imgs
+    sampling_strategy: "all"
