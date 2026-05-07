@@ -257,3 +257,5 @@ tmp/
 
 # evaluation results
 eval_results/*
+
+datasets/GUI-Actor-Data/

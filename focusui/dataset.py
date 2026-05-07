@@ -189,7 +189,7 @@ def process_vision_info_w_factor(
     video_sample_fps_list = []
     for vision_info in vision_infos:
         if "image" in vision_info or "image_url" in vision_info:
-            image_inputs.append(fetch_image(vision_info, image_patch_size=image_factor))
+            image_inputs.append(fetch_image(vision_info, image_patch_size=14)) # NOTE: THIS IS THE SOURCE OF BUG!!! image_patch_size=image_factor is WRONG!!
         elif "video" in vision_info:
             video_input, video_sample_fps = fetch_video(vision_info, return_video_sample_fps=True)
             video_sample_fps_list.append(video_sample_fps)
@@ -408,7 +408,7 @@ class LazySupervisedDataset(Dataset):
         element_bbox_gt = data_dict["bbox_gt"]
         # element_bbox_gt = data_dict["bbox_gt"] if data_dict["bbox_gt"] is not None else [0, 0, 0, 0]
         element_query_text = sources[0]["value"].replace(DEFAULT_IMAGE_TOKEN, "").strip()
-
+        # BUG: score and score_label doesn't match
         focusui_data_dict = preprocess_focusui_data(
             ele_image=element_image,
             ele_bbox=element_bbox_gt,

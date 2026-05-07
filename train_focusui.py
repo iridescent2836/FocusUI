@@ -38,7 +38,7 @@ local_rank = None
 @dataclass
 class ModelArguments:
     model_name_or_path: Optional[str] = field(default="huggingface/Qwen2.5-VL-3B-Instruct")
-    flash_attn_2_enabled: bool = field(default=True)
+    flash_attn_2_enabled: bool = field(default=False)
     model_type: str = field(default="focusui_3b", metadata={"help": "model type: qwen2vl or qwen25vl"})
 
 
@@ -65,7 +65,7 @@ class TrainingArguments(transformers.TrainingArguments):
     group_by_modality_length: bool = field(default=False)
     gradient_checkpointing: bool = field(default=True)
     verbose_logging: bool = field(default=False)
-    
+
     unfreeze_all_parameters: bool = field(default=False)
     unfreeze_pointer_head: bool = field(default=True)
     unfreeze_lm_head: bool = field(default=False)
@@ -104,7 +104,7 @@ def smart_tokenizer_and_embedding_resize(
     num_new_tokens = tokenizer.add_special_tokens(special_tokens_dict)
     model.resize_token_embeddings(len(tokenizer))
 
-    new_vocab_size = len(tokenizer)    
+    new_vocab_size = len(tokenizer)
     # Update base model and current model config
     if hasattr(model.config, "text_config"):
         model.config.text_config.vocab_size = new_vocab_size
@@ -131,7 +131,7 @@ def update_pointer_token_ids(model_config: transformers.PretrainedConfig, tokeni
     rank0_print(f"Updated pointer token ids:\n pointer_start_token_id: {model_config.pointer_start_token_id}\npointer_end_token_id: {model_config.pointer_end_token_id}\npointer_pad_token_id: {model_config.pointer_pad_token_id}\nimage_drop_end_token_id: {model_config.image_drop_end_token_id}")
 
 def setup_params_to_update(model: transformers.PreTrainedModel, training_args: TrainingArguments):
-    
+
     if training_args.unfreeze_all_parameters:
         rank0_print(f"Unfreezing all model parameters...")
         for p in model.parameters():
@@ -152,7 +152,7 @@ def setup_params_to_update(model: transformers.PreTrainedModel, training_args: T
             rank0_print(f"Unfreezing lm head parameters...")
             for p in model.lm_head.parameters():
                 p.requires_grad = True
-        
+
         if training_args.unfreeze_base_model: # including text tokens
             rank0_print(f"Unfreezing base model parameters...")
             for p in model.model.parameters():
@@ -169,7 +169,7 @@ def setup_params_to_update(model: transformers.PreTrainedModel, training_args: T
                 p.requires_grad = True
 
         if (training_args.unfreeze_new_pointer_tokens or
-            training_args.unfreeze_new_all_tokens or 
+            training_args.unfreeze_new_all_tokens or
             training_args.unfreeze_new_image_drop_tokens):
             rank0_print(f"Unfreezing new tokens parameters via embedding hook...")
             if hasattr(model, "model") and hasattr(model.model, "embed_tokens"):
@@ -221,7 +221,7 @@ class DataCollatorForSupervisedDataset:
 
         if "coordinates" in instances[0]:
             batch["coordinates"] = [instance["coordinates"] for instance in instances]
-        
+
         if "visual_token_indices_of_coordinates" in instances[0]:
             batch["visual_token_indices_of_coordinates"] = [instance["visual_token_indices_of_coordinates"] for instance in instances]
 
@@ -230,12 +230,12 @@ class DataCollatorForSupervisedDataset:
 
         if "patch_scores_label" in instances[0]:
             batch["patch_scores_label"] = [instance["patch_scores_label"] for instance in instances]
-        
+
         if "focus_input_ids" in instances[0]:
             focus_input_ids = [instance["focus_input_ids"] for instance in instances]
             focus_input_ids = [_input_ids[: self.tokenizer.model_max_length] for _input_ids in focus_input_ids]
             focus_input_ids = self.pad_sequence(focus_input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id)
-            
+
             batch["focus_input_ids"] = focus_input_ids
             batch["focus_attention_mask"] = torch.ones_like(focus_input_ids)
 
@@ -295,7 +295,7 @@ def train():
         model = FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer.from_pretrained(
             model_args.model_name_or_path,
             cache_dir=training_args.cache_dir,
-            attn_implementation="flash_attention_2" if model_args.flash_attn_2_enabled else None,
+            attn_implementation="flash_attention_2" if model_args.flash_attn_2_enabled else "sdpa",
             dtype=(torch.bfloat16 if training_args.bf16 else None),
             low_cpu_mem_usage=False,
         )
@@ -323,7 +323,7 @@ def train():
         model = FocusUI_Qwen3VLForConditionalGenerationWithPointer.from_pretrained(
             model_args.model_name_or_path,
             cache_dir=training_args.cache_dir,
-            attn_implementation="flash_attention_2" if model_args.flash_attn_2_enabled else None,
+            attn_implementation="flash_attention_2" if model_args.flash_attn_2_enabled else "sdpa",
             dtype=(torch.bfloat16 if training_args.bf16 else None),
             low_cpu_mem_usage=False,
         )
@@ -389,7 +389,7 @@ def train():
 
     if not os.path.exists(training_args.output_dir):
         os.makedirs(training_args.output_dir, exist_ok=True)
-    
+
     if training_args.local_rank == 0 or training_args.local_rank == -1:
         dump_args_to_json(model.config, data_args.processor, model_args, data_args, training_args, training_args.output_dir)
 
@@ -416,7 +416,7 @@ def train():
             grad[:-n_new_tokens] = 0.0
             return grad
         emb_param.register_hook(_mask_grad)
-    
+
     if training_args.unfreeze_new_image_drop_tokens:
         emb_param = None
         for n, p in trainer.model.named_parameters():
@@ -431,7 +431,7 @@ def train():
             grad[:-n_new_tokens] = 0.0
             return grad
         emb_param.register_hook(_mask_grad)
-    
+
     # When LiteTrain, only update the gradient of the new tokens
     if training_args.unfreeze_new_all_tokens:
         emb_param = None

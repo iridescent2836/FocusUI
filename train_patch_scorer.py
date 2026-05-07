@@ -88,7 +88,7 @@ def main():
     model = FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer.from_pretrained(
         args.model_name_or_path,
         torch_dtype=torch.bfloat16 if args.bf16 else torch.float32,
-        attn_implementation="flash_attention_2",
+        attn_implementation="sdpa",
         low_cpu_mem_usage=False,
     )
     # Skip the LM decoder entirely during scorer training

@@ -27,7 +27,7 @@ mkdir -p "$TMP"
 # Helper: download a single file from the HF dataset repo
 hf_dl() {
     local filename="$1"
-    huggingface-cli download "$HF_REPO" \
+    hf download "$HF_REPO" \
         --repo-type dataset \
         --include "$filename" \
         --local-dir "$TMP"

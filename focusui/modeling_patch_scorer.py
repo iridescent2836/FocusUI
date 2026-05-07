@@ -182,7 +182,7 @@ class PatchScorerModel(PreTrainedModel):
             raise ValueError(f"Unsupported text_token_pooling: {self.text_token_pooling}")
 
         if patch_scores_label is not None:
-            loss = self.compute_loss(patch_scores, patch_scores_label)
+            loss = self.compute_loss(patch_scores, patch_scores_label.to(device=patch_scores.device))
         else:
             loss = None
 

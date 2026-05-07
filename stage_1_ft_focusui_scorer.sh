@@ -3,20 +3,22 @@ export WANDB_API_KEY=""
 export WANDB_PROJECT="FocusUI"
 
 model_type="focusui_3b"
-llm_model="huggingface/Qwen2.5-VL-3B-Instruct"
+# llm_model="huggingface/Qwen2.5-VL-3B-Instruct"
+# llm_model="Qwen/Qwen2.5-VL-3B-Instruct"
+llm_model="./checkpoints/FocusUI-3B"
 output_dir="checkpoints/${model_type}_ft_scorer"
 
 export WANDB_NAME="FocusUI_Qwen25VL_3B_FT_PatchScorer"
 
 # === GPU Assignment ===
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export CUDA_VISIBLE_DEVICES=0
 
 
 # === Training Command ===
-torchrun --nproc_per_node=8 --master_port=29666 \
+torchrun --nproc_per_node=1 --master_port=29666 \
   train_focusui.py \
   --deepspeed ./scripts/zero2.json \
-  --data_path data/data_config.yaml \
+  --data_path data/data_config_guiact_only.yaml \
   --image_folder "" \
   --model_type ${model_type} \
   --model_name_or_path ${llm_model} \
@@ -58,4 +60,4 @@ torchrun --nproc_per_node=8 --master_port=29666 \
   --train_patch_scorer_only True \
   --focus_ui_train_visual_reduct_ratio_min 0.0 \
   --focus_ui_train_visual_reduct_ratio_max 0.95 \
-  --focus_ui_visual_reduct_ratio 0.5 
+  --focus_ui_visual_reduct_ratio 0.5
