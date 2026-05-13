@@ -16,6 +16,7 @@ from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VLCausalL
 
 from focusui.trainer import rank0_print
 from focusui.modeling_patch_scorer import PatchScorerConfig, PatchScorerModel
+from focusui.inference import AsyncPatchScorer
 
 import time
 import logging
@@ -305,6 +306,7 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
         torch.cuda.synchronize()
         elapsed_time = time.perf_counter() - start_time
         logger.info(f"visual_encoding_time: {elapsed_time:.4f} seconds")
+        logger.info(f"n_image_tokens: {n_image_tokens}")
         # if we get 4D attention mask we cannot calculate rope deltas anymore. TODO @raushan fixme
         if position_ids is None and (attention_mask is None or attention_mask.ndim == 2):
             # calculate RoPE index once per generation in the pre-fill stage only
@@ -359,6 +361,10 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
 
             self._last_patch_scores = patch_scores
         elif patch_scores is not None:
+            if isinstance(patch_scores, AsyncPatchScorer):
+            # 如果 Visual Encoder 跑完了，CPU 还没算完，这里会稍微等一下
+            # 如果 CPU 已经算完了，这里直接秒过
+                patch_scores = patch_scores.wait_and_get(self.device)
             # If patch_scores is provided externally (e.g., for ablations), cache it for retrieval after `generate()`.
             self._last_patch_scores = patch_scores
 

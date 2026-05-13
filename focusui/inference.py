@@ -14,6 +14,8 @@ from focusui.constants import (
 )
 import time
 import logging
+import threading
+
 logger = logging.getLogger("FocusUI")
 
 from focusui.dataset import process_vision_info_w_factor
@@ -181,6 +183,41 @@ def get_prediction_region_point(attn_scores, n_width, n_height, activation_thres
         return best_point
 
 
+
+class AsyncPatchScorer:
+    def __init__(self, ele_image, image_grid_thw, scorer_type):
+        self.result = None
+        self.done = False
+        # 立即启动后台线程
+        self.thread = threading.Thread(target=self._compute, args=(ele_image, image_grid_thw, scorer_type))
+        self.thread.start()
+        self._last_result = None
+
+    def _compute(self, ele_image, image_grid_thw, scorer_type):
+        # 这里的计算是在后台线程执行的，不占用主线程时间
+        res = preprocess_focusui_data(
+            ele_image=ele_image,
+            image_grid_thw=image_grid_thw,
+            ui_graph_scorer_type=scorer_type
+        )
+        self.result = res['patch_scores_label'] # 这是一个 CPU Tensor
+        self.done = True
+
+
+    def wait_and_get(self, device):
+            # 1. 第一次调用时，等待线程结束
+            if self.thread.is_alive():
+                self.thread.join()
+
+            # 2. 如果还没有缓存到 GPU，就搬运一次
+            if self._last_result is None:
+                # 这里可以顺便做你的“测试”逻辑
+                # print(f"DEBUG: patch_scores shape: {self.result.shape}")
+                self._last_result = self.result.unsqueeze(0).to(device)
+
+            # 3. 之后直接返回已经准备好的 GPU Tensor，秒回
+            return self._last_result
+
 def inference_focusui_token_select(
     conversation,
     model,
@@ -273,26 +310,43 @@ def inference_focusui_token_select(
 
     image_grid_thw = inputs.get("image_grid_thw", None)
 
+    # TODO: parallel preprocess with visual encoder.
     # if scorer type is ssim or l2-norm, use solely image-based score type.
     if image_inputs is not None and scorer_type in ['ssim', 'l2-norm', 'random', 'hist', 'ncc']:
-        all_scores = []
-        for idx, img in enumerate(image_inputs):
-            start = time.perf_counter()
+        # all_scores = []
+        # for idx, img in enumerate(image_inputs):
+        #     start = time.perf_counter()
 
-            res = preprocess_focusui_data(ele_image=img, image_grid_thw=image_grid_thw[idx], ui_graph_scorer_type=scorer_type) # The bbox argument was not passed. Hence, the bbox score is zero.
-            elapsed = time.perf_counter() - start
-            logger.info(f"image_preprocess_time: {elapsed:.6f} seconds")
+        #     res = preprocess_focusui_data(ele_image=img, image_grid_thw=image_grid_thw[idx], ui_graph_scorer_type=scorer_type) # The bbox argument was not passed. Hence, the bbox score is zero.
+        #     elapsed = time.perf_counter() - start
+        #     logger.info(f"image_preprocess_time: {elapsed:.6f} seconds")
 
 
-            all_scores.append(res['patch_scores_label'])
+        #     all_scores.append(res['patch_scores_label'])
 
-        inputs['patch_scores'] = torch.cat(all_scores, dim = 0).unsqueeze(0).to(model.device) # when input has attribute 'patch_score', the model won't call scorer module.ds
+        # 1. 准备阶段：立即启动 CPU 后台计算
+        # 注意：这里不需要循环，如果是单张图就直接开一个任务
+        ui_graph_score_task = AsyncPatchScorer(
+            ele_image=image_inputs[0],
+            image_grid_thw=image_grid_thw[0],
+            scorer_type=scorer_type
+        )
+
+        # 2. 准备 inputs，直接把 task 对象塞进去
+        # 注意：不要在 inputs['patch_scores'] 放 Tensor 了，放这个 task 对象
+        inputs['patch_scores'] = ui_graph_score_task
+        # patch_scores_original = torch.cat(all_scores, dim = 0).unsqueeze(0).to(model.device) # when input has attribute 'patch_score', the model won't call scorer module.ds
+        # patch_scores_new = scorer_task.wait_and_get(model.device)
+        # if torch.equal(patch_scores_original, patch_scores_new):
+        #     print("New parallel patch_scores generation is correct!")
+        # else:
+        #     print("New parallel patch_scores generation is incorrect...")
+
 
 
     inputs = inputs.to(model.device)
 
-
-    start_time = time.perf_counter() # 建议使用 perf_counter 代替 time.time() 以获取高精度
+    start_time = time.perf_counter()
     # generate
     if model.apply_visual_token_select:
         results, patch_score_pred = model.generate_with_visual_token_select(
@@ -313,7 +367,6 @@ def inference_focusui_token_select(
             output_hidden_states=True
             )  # outputs: odict_keys(['sequences', 'hidden_states', 'past_key_values'])
         patch_score_pred = None
-
     torch.cuda.synchronize()
 
     elapsed_time = time.perf_counter() - start_time

@@ -325,7 +325,7 @@ if __name__ == "__main__":
     metric_json_path = os.path.join(args.save_path, "screenspot-Pro_all_metrics.json")
     metric_csv_path = os.path.join(args.save_path, "screenspot-Pro_all_metrics.csv")
 
-    logger_path = os.path.join(args.save_path, f"screenspot_Pro_all.log")
+    logger_path = os.path.join(args.save_path, f"screenspot_Pro_latency.log")
     print(f"logging_path: {logger_path}")
 
     logger_prefix = f"[FocusUI-{args.model_type}-{args.scorer_type}]"
