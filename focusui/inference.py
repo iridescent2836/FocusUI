@@ -229,7 +229,8 @@ def inference_focusui_token_select(
     topk=3,
     scorer_type: str = "scorer",
     using_combined_scorer: bool = False,
-    combined_scorer_weight: float = 0.5
+    combined_scorer_weight: float = 0.5,
+    using_parallel_computation: bool = True,
     ):
     """
     conversation = [
@@ -312,6 +313,7 @@ def inference_focusui_token_select(
 
     # TODO: parallel preprocess with visual encoder.
     # if scorer type is ssim or l2-norm, use solely image-based score type.
+
     if image_inputs is not None and scorer_type in ['ssim', 'l2-norm', 'random', 'hist', 'ncc']:
         # all_scores = []
         # for idx, img in enumerate(image_inputs):
@@ -323,24 +325,36 @@ def inference_focusui_token_select(
 
 
         #     all_scores.append(res['patch_scores_label'])
+        if using_parallel_computation:
+            # 1. 准备阶段：立即启动 CPU 后台计算
+            # 注意：这里不需要循环，如果是单张图就直接开一个任务
+            ui_graph_score_task = AsyncPatchScorer(
+                ele_image=image_inputs[0],
+                image_grid_thw=image_grid_thw[0],
+                scorer_type=scorer_type
+            )
 
-        # 1. 准备阶段：立即启动 CPU 后台计算
-        # 注意：这里不需要循环，如果是单张图就直接开一个任务
-        ui_graph_score_task = AsyncPatchScorer(
-            ele_image=image_inputs[0],
-            image_grid_thw=image_grid_thw[0],
-            scorer_type=scorer_type
-        )
+            # 2. 准备 inputs，直接把 task 对象塞进去
+            # 注意：不要在 inputs['patch_scores'] 放 Tensor 了，放这个 task 对象
+            inputs['patch_scores'] = ui_graph_score_task
+            # patch_scores_original = torch.cat(all_scores, dim = 0).unsqueeze(0).to(model.device) # when input has attribute 'patch_score', the model won't call scorer module.ds
+            # patch_scores_new = scorer_task.wait_and_get(model.device)
+            # if torch.equal(patch_scores_original, patch_scores_new):
+            #     print("New parallel patch_scores generation is correct!")
+            # else:
+            #     print("New parallel patch_scores generation is incorrect...")
+        else:
+            all_scores = []
+            for idx, img in enumerate(image_inputs):
+                start = time.perf_counter()
 
-        # 2. 准备 inputs，直接把 task 对象塞进去
-        # 注意：不要在 inputs['patch_scores'] 放 Tensor 了，放这个 task 对象
-        inputs['patch_scores'] = ui_graph_score_task
-        # patch_scores_original = torch.cat(all_scores, dim = 0).unsqueeze(0).to(model.device) # when input has attribute 'patch_score', the model won't call scorer module.ds
-        # patch_scores_new = scorer_task.wait_and_get(model.device)
-        # if torch.equal(patch_scores_original, patch_scores_new):
-        #     print("New parallel patch_scores generation is correct!")
-        # else:
-        #     print("New parallel patch_scores generation is incorrect...")
+                res = preprocess_focusui_data(ele_image=img, image_grid_thw=image_grid_thw[idx], ui_graph_scorer_type=scorer_type) # The bbox argument was not passed. Hence, the bbox score is zero.
+                elapsed = time.perf_counter() - start
+                logger.info(f"image_preprocess_time: {elapsed:.6f} seconds")
+
+
+                all_scores.append(res['patch_scores_label'])
+            inputs['patch_scores'] = torch.cat(all_scores, dim = 0).unsqueeze(0).to(model.device) # when input has attribute 'patch_score', the model won't call scorer module.ds
 
 
 

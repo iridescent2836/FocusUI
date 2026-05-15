@@ -362,8 +362,6 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
             self._last_patch_scores = patch_scores
         elif patch_scores is not None:
             if isinstance(patch_scores, AsyncPatchScorer):
-            # 如果 Visual Encoder 跑完了，CPU 还没算完，这里会稍微等一下
-            # 如果 CPU 已经算完了，这里直接秒过
                 patch_scores = patch_scores.wait_and_get(self.device)
             # If patch_scores is provided externally (e.g., for ablations), cache it for retrieval after `generate()`.
             self._last_patch_scores = patch_scores

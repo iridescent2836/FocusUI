@@ -15,6 +15,9 @@ from datasets import load_dataset
 from tqdm import tqdm
 import random
 import logging
+import time
+
+logger = logging.getLogger("FocusUI")
 
 random.seed(42)
 
@@ -60,6 +63,7 @@ def evaluate(
         getattr(args, "scorer_type", "scorer"),
         getattr(args, "using_combined_scorer", False),
         getattr(args, "combined_scorer_weight", 0.5),
+        getattr(args, "using_parallel_computation", True),
     )
     print(f"Loaded model from {model_name_or_path}")
 
@@ -116,6 +120,7 @@ def evaluate(
         ]
 
         with torch.no_grad():
+            start_time = time.perf_counter()
             pred = inference_fn(
                 conversation=conversation,
                 model=model,
@@ -125,6 +130,10 @@ def evaluate(
                 use_placeholder=use_placeholder,
                 topk=topk,
             )
+            torch.cuda.synchronize()
+            elapsed = time.perf_counter() - start_time
+            logger.info(f"total_inference_time: {elapsed:.6f} seconds")
+
 
         topk_points = pred["topk_points"]
         gt_bbox = ele["bbox_x1y1x2y2"]
@@ -322,6 +331,8 @@ if __name__ == "__main__":
     parser.set_defaults(using_combined_scorer=False)
     parser.add_argument("--using_random_samples", dest="using_random_samples", action="store_true")
     parser.set_defaults(using_random_samples=False)
+    parser.add_argument("--using_sequential_computation", dest="using_parallel_computation", action="store_false")
+    parser.set_defaults(using_parallel_computation=True)
 
     args = parser.parse_args()
 
