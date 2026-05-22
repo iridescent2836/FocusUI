@@ -8,19 +8,65 @@ import torch
 from PIL import Image, ImageDraw
 import matplotlib.cm as cm
 from focusui.preprocess_focusui import *
+from matplotlib.colors import Normalize
+
 
 def save_overlay_only(resized_img, final_merged_2d, smart_w, smart_h, save_path="overlay_only.png"):
     plt.figure(figsize=(10, 10))
     plt.imshow(resized_img)
     # 使用 jet 映射并将数值映射到图像上
     plt.imshow(final_merged_2d, cmap='jet', alpha=0.5,
-               extent=(0, smart_w, smart_h, 0), interpolation='bilinear')
+               extent=(0, smart_w, smart_h, 0), interpolation='nearest')
     plt.axis('off')
 
     # 去除白边并保存
     plt.savefig(save_path, bbox_inches='tight', pad_inches=0, dpi=300)
     plt.close() # 关闭画布防止内存占用
     print(f"Overlay 图片已保存至: {save_path}")
+
+def save_overlay_only_new(resized_img, final_merged_2d, smart_w, smart_h,
+                      save_path="overlay_only.png", score_label="Score"):
+    """
+    保存 overlay 图片，右侧附带 colorbar 显示得分值与颜色的对应关系
+    """
+    fig, (ax_img, ax_cbar) = plt.subplots(
+        1, 2,
+        figsize=(12, 10),           # 加宽给 colorbar 留空间
+        gridspec_kw={'width_ratios': [10, 0.5]},  # 主图宽，colorbar 窄
+        dpi=100
+    )
+
+    # 1. 主图：原图 + 热力图 overlay
+    ax_img.imshow(resized_img)
+    im = ax_img.imshow(
+        final_merged_2d,
+        cmap='jet',
+        alpha=0.5,
+        extent=(0, smart_w, smart_h, 0),
+        interpolation='nearest'
+    )
+    ax_img.set_title("Final Label Overlay", fontsize=14)
+    ax_img.axis('off')
+
+    # 2. Colorbar：得分值映射
+    # 自动根据 final_merged_2d 的数据范围设置
+    vmin, vmax = final_merged_2d.min(), final_merged_2d.max()
+    norm = Normalize(vmin=vmin, vmax=vmax)
+
+    # 创建 colorbar，放在右侧窄轴上
+    cbar = fig.colorbar(
+        cm.ScalarMappable(norm=norm, cmap='jet'),
+        cax=ax_cbar,
+        orientation='vertical'
+    )
+    cbar.set_label(score_label, fontsize=12)
+    cbar.ax.tick_params(labelsize=10)
+
+    # 3. 调整布局并保存
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight', pad_inches=0.1)
+    plt.close()
+    print(f"Overlay 图片（含 colorbar）已保存至: {save_path}")
 
 # 在 visualize_focusui_preprocessing 函数末尾调用它：
 
@@ -98,7 +144,7 @@ def visualize_focusui_preprocessing(ele_image: Image.Image, ele_bbox: tuple, res
                       extent=(0, smart_w, smart_h, 0),    interpolation='nearest' )
     axes[1, 2].set_title("6. Final Label Overlay")
 
-    save_overlay_only(resized_img, final_merged_2d, smart_w, smart_h)
+    save_overlay_only_new(resized_img, final_merged_2d, smart_w, smart_h)
 
 
     for ax in axes.flatten():
@@ -111,20 +157,25 @@ if __name__ == "__main__":
     # --- 运行示例 ---
     # 1. 模拟输入
     # test_path = "./datasets/Example-Data/images/1c6422e3-8eea-44db-9d70-67e74920ae02.png"
-    test_path = "/home/iridescent/Code/FocusUI/datasets/UI-Grounding-Benchmarks/OSWorld-G/images/0lp8IshCDB.png"
+    test_path = "./saved_images/image_idx_548.png"
     test_path_1 = "./tmp/point_on_image.png"
     test_img =  Image.open(test_path)
-    test_bbox =  [0.098,0.762,0.269,0.829] # 假设中间有一个元素
+    test_bbox =  [0.03703704,0.5,        0.27037037, 0.63041667] # 假设中间有一个元素
 
     test_image_grid_thw = torch.tensor([ 1, 56, 96])  # 假设 smart resize 后是 384x384，patch size 是16，那么就是24x24的网格
 
     is_visulize = True
-    is_using_bbox = False
+    is_using_bbox = True
 
     if is_visulize:
-        for scorer_type in ["ssim"]:
-            processed_data = preprocess_focusui_data(test_img, ui_graph_scorer_type=scorer_type)
-            visualize_focusui_preprocessing(test_img, test_bbox, processed_data)
+        if is_using_bbox:
+            for scorer_type in ["l2-norm"]:
+                processed_data = preprocess_focusui_data(test_img,test_bbox, ui_graph_scorer_type=scorer_type)
+                visualize_focusui_preprocessing(test_img, test_bbox, processed_data)
+        else:
+            for scorer_type in ["l2-norm"]:
+                processed_data = preprocess_focusui_data(test_img, ui_graph_scorer_type=scorer_type)
+                visualize_focusui_preprocessing(test_img, test_bbox, processed_data)
 
 
         # if is_using_bbox:

@@ -243,7 +243,7 @@ class FocusUI_Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditi
         verbose: bool = False,
         verbose_visual_token_selection_summary: bool = False,
         # My stuff
-        using_combined_scorer: Optional[bool] = False,
+        using_combined_scorer: Optional[bool] = True,
         combined_scorer_weight: Optional[float] = 0.5
     ) -> Union[Tuple, FocusUI_QwenVLwithVisionHeadOutputWithPast]:
 

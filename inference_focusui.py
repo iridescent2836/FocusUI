@@ -31,6 +31,8 @@ processor = AutoProcessor.from_pretrained(model_path)
 # Prepare conversation
 image_path = "assets/example_screenshot.png"
 image_path = "./datasets/Example-Data/images/1c6422e3-8eea-44db-9d70-67e74920ae02.png"
+image_path = "./saved_images/image_idx_548.png"
+
 
 conversation = [
     {
@@ -42,7 +44,7 @@ conversation = [
         "content": [
             {"type": "image", "image": image_path},
             # {"type": "text", "text": "Go to 'Watch Live'."}
-            {"type": "text", "text": "Submit an application to develop and list an app."}
+            {"type": "text", "text": "open message app"}
 
         ]
     }
@@ -58,6 +60,9 @@ result = inference_focusui_token_select(
     tokenizer=processor.tokenizer,
     data_processor=processor,
     topk=3,
+    scorer_type="l2-norm",
+    using_combined_scorer=True,
+    combined_scorer_weight=0.0 # only draw scorer
 )
 
 # Get predicted coordinates
